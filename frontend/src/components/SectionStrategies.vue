@@ -111,4 +111,9 @@ async function removeFromSection(s) {
 .loading { padding: 24px 18px; color: var(--muted); font-size: 0.9rem; }
 .empty-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
 .error.inline { margin: 0 18px 14px; }
+/* Phones: name on its own line, controls wrap below it. */
+@media (max-width: 640px) {
+  .list li { flex-wrap: wrap; row-gap: 8px; }
+  .li-main { flex: 1 1 calc(100% - 44px); }
+}
 </style>

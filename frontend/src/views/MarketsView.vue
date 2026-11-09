@@ -210,7 +210,9 @@ async function setChart(key) {
 .up { color: var(--good); }
 .down { color: var(--bad); }
 .chart-card { position: sticky; top: 88px; }
-.chart-tools { display: flex; gap: 6px; }
+.chart-card .card-head { flex-wrap: wrap; row-gap: 8px; }
+.chart-tools { display: flex; gap: 6px; min-width: 0; max-width: 100%; }
+.chart-tools .inp.sm { max-width: 190px; min-width: 0; }
 .chart-body { height: 460px; position: relative; }
 .chart-empty { display: grid; place-items: center; height: 100%; }
 .chart-foot { padding: 8px 18px 12px; border-top: 1px solid var(--border); }

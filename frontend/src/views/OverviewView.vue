@@ -7,8 +7,9 @@
     </PageHeader>
 
     <section class="stats">
-      <StatTile label="Today's P&L" :value="formatINR(0)" hint="No trades yet" tone="muted" icon="rupee" />
-      <StatTile label="Open positions" value="0" hint="Across all sections" icon="layers" />
+      <StatTile label="Today's P&L (net)" :value="formatINR(todayNet)" :tone="todayNet > 0 ? 'good' : todayNet < 0 ? 'bad' : 'muted'"
+        :hint="trading.summary?.trades_today ? `${trading.summary.trades_today} paper trades today` : 'No trades yet today'" icon="rupee" />
+      <StatTile label="Open positions" :value="String(trading.summary?.open_positions ?? 0)" hint="Across all sections" icon="layers" />
       <StatTile label="Strategies" :value="strategies.count" :hint="strategies.count ? `${inSections} added to a section` : 'Create one in Algo Trading'" icon="algo" />
       <StatTile label="Brokers connected" :value="brokers.connectedCount" :hint="brokers.accounts.length ? `${brokers.accounts.length} added` : 'Add Dhan in Settings'" icon="broker" />
     </section>
@@ -17,9 +18,9 @@
 
     <div class="grid-2">
       <section class="grid-3 sections">
-        <SectionCard to="/algo" icon="algo" title="Algo Trading" tag="Phase 2"
+        <SectionCard to="/algo" icon="algo" title="Algo Trading" tag="Scanner running" tag-tone="accent"
           text="Strategies, backtests on past data, and the market scanner that finds trades for you." />
-        <SectionCard to="/intraday" icon="intraday" title="Intraday" tag="Phase 3"
+        <SectionCard to="/intraday" icon="intraday" title="Intraday" tag="Paper trading" tag-tone="accent"
           text="Same-day trades with strict limits. Auto square-off at 3:15 PM." />
         <SectionCard to="/swing" icon="swing" title="Swing" tag="Phase 5"
           text="Hold positions for days, on daily candles, with a trailing stop loss." />
@@ -81,6 +82,7 @@ import { useAuthStore } from '../stores/auth'
 import { useBrokersStore } from '../stores/brokers'
 import { useMarketStore } from '../stores/market'
 import { useStrategiesStore } from '../stores/strategies'
+import { useTradingStore } from '../stores/trading'
 import { useSystemStore } from '../stores/system'
 import { useUiStore } from '../stores/ui'
 import { formatINR, marketStatus } from '../utils/format'
@@ -92,7 +94,9 @@ const strategies = useStrategiesStore()
 const inSections = computed(() => strategies.items.filter((s) => s.section).length)
 const brokers = useBrokersStore()
 const market = useMarketStore()
-onMounted(() => { strategies.load().catch(() => {}); brokers.load().catch(() => {}); market.connect() })
+const trading = useTradingStore()
+const todayNet = computed(() => Number(trading.summary?.realised_today || 0) + Number(trading.summary?.unrealised || 0))
+onMounted(() => { strategies.load().catch(() => {}); brokers.load().catch(() => {}); trading.load().catch(() => {}); market.connect() })
 onBeforeUnmount(() => market.disconnect())
 const marketState = computed(() => marketStatus())
 const mode = computed(() => auth.user?.trading_mode ?? 'paper')

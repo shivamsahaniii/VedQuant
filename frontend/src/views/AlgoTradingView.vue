@@ -9,7 +9,7 @@
     <section class="stats">
       <StatTile label="Strategies" :value="strategies.count" :hint="`${inSections} in a section`" icon="layers" />
       <StatTile label="Running now" :value="running" hint="Paper or live" icon="algo" />
-      <StatTile label="Signals today" value="0" hint="Buy / sell ideas found" icon="signal" />
+      <StatTile label="Signals today" :value="String(signalsToday.length)" :hint="`${signalsToday.filter((s) => ['taken', 'suggested'].includes(s.status)).length} taken or suggested`" icon="signal" />
       <StatTile label="Backtests" value="0" hint="Runs on past data" icon="flask" />
     </section>
 
@@ -75,17 +75,15 @@
       <aside class="stack">
         <MarketMoodCard compact />
         <div class="card">
-          <div class="card-head"><h2>Scanner</h2><span class="tag">Phase 3</span></div>
+          <div class="card-head"><h2>Scanner</h2><span class="tag good">Running</span></div>
           <div class="card-body">
-            <div class="seg" role="group" aria-label="Scanner mode">
-              <button class="seg-btn on" disabled>Alerts only</button>
-              <button class="seg-btn" disabled>Auto trade</button>
-            </div>
             <dl class="kv spaced">
-              <dt>Universe</dt><dd>Nifty 500</dd>
-              <dt>Filters</dt><dd>Price within capital, min volume</dd>
-              <dt>Runs on</dt><dd>Every new candle</dd>
+              <dt>Runs on</dt><dd>Every closed candle</dd>
+              <dt>Symbols</dt><dd>Each strategy's own list (or all followed)</dd>
+              <dt>Mode</dt><dd>Per strategy: Suggest only / Auto paper</dd>
+              <dt>Strategies running</dt><dd>{{ running }}</dd>
             </dl>
+            <p class="muted small-note">Set the mode and start or pause each strategy in its section (Intraday, Swing).</p>
           </div>
         </div>
         <div class="card">
@@ -111,6 +109,7 @@ import StatTile from '../components/StatTile.vue'
 import { computed, onMounted, ref } from 'vue'
 import { errorMessage } from '../api/client'
 import { MOVABLE, useStrategiesStore } from '../stores/strategies'
+import { useTradingStore } from '../stores/trading'
 import { useUiStore } from '../stores/ui'
 import { ACTIVE_SECTIONS, SECTION_LABEL, STATUS_TONE, TEMPLATES, strategySummary } from '../utils/strategies'
 
@@ -124,7 +123,10 @@ let confirmTimer
 const inSections = computed(() => strategies.items.filter((s) => s.section).length)
 const running = computed(() => strategies.items.filter((s) => s.status === 'paper' || s.status === 'live').length)
 
-onMounted(() => strategies.load().catch((e) => { error.value = errorMessage(e) }))
+const trading = useTradingStore()
+const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+const signalsToday = computed(() => trading.signals.filter((s) => new Date(s.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === todayIST()))
+onMounted(() => { strategies.load().catch((e) => { error.value = errorMessage(e) }); trading.load().catch(() => {}) })
 
 async function run(s, fn) {
   busyId.value = s.id
@@ -148,6 +150,7 @@ function remove(s) {
 </script>
 
 <style scoped>
+.small-note { font-size: 0.82rem; margin: 10px 0 0; }
 .tpl-icon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); flex: none; }
 .seg { display: flex; background: var(--surface-3); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
 .seg-btn { flex: 1; border: 0; background: none; padding: 7px; border-radius: 7px; font: inherit; font-weight: 600; font-size: 0.84rem; color: var(--muted); }
