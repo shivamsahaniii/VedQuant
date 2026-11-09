@@ -1,0 +1,20 @@
+# Phase 1 runtime dependencies.
+# pandas-ta and vectorbt are added in Phase 2 (strategies/backtesting).
+# Broker SDKs are added only when their adapter is built, after checking they are current.
+fastapi
+uvicorn[standard]
+pydantic-settings
+email-validator
+sqlalchemy[asyncio]
+asyncpg
+alembic
+redis
+apscheduler
+pandas
+numpy
+cryptography
+pwdlib[argon2]
+pyjwt
+httpx
+websockets
+structlog

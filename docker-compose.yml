@@ -1,0 +1,78 @@
+name: vedquant
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: vedquant
+      POSTGRES_PASSWORD: vedquant
+      POSTGRES_DB: vedquant
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vedquant -d vedquant"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://vedquant:vedquant@db:5432/vedquant
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Market data feed: simulator today (paper trading), a user's Dhan data key later.
+  feed:
+    build: ./backend
+    command: ["python", "-m", "app.data.feed"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://vedquant:vedquant@db:5432/vedquant
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Engine: reacts to every new candle (market mood now; signals + paper trades next).
+  engine:
+    build: ./backend
+    command: ["python", "-m", "app.engine.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://vedquant:vedquant@db:5432/vedquant
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  redis_data:

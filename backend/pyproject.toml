@@ -1,0 +1,27 @@
+[project]
+name = "vedquant-backend"
+version = "0.1.0"
+description = "Vedquant: multi-user rule-based algo trading platform (backend)"
+requires-python = ">=3.12"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S311"]
+"tests/conftest.py" = ["E402", "S101", "S105", "S106"]
+"tests/test_dhan_broker.py" = ["E501", "S101", "S105", "S106"]  # real CSV rows from Dhan
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
