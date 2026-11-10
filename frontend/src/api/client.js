@@ -83,6 +83,7 @@ export const strategiesApi = {
   update: (id, changes) => api.patch(`/strategies/${id}`, changes).then((r) => r.data),
   remove: (id) => api.delete(`/strategies/${id}`),
   setStatus: (id, status) => api.post(`/strategies/${id}/status`, { status }).then((r) => r.data),
+  builder: () => api.get('/strategies/builder').then((r) => r.data),
 }
 
 export const tradingApi = {
@@ -100,6 +101,7 @@ export const connectorsApi = {
 }
 
 export const marketsApi = {
+  holidays: () => api.get('/market/holidays').then((r) => r.data),
   catalog: (asset) => api.get('/markets/catalog', { params: asset ? { asset } : {} }).then((r) => r.data),
   watchlist: () => api.get('/markets/watchlist').then((r) => r.data),
   add: (item) => api.post('/markets/watchlist', item).then((r) => r.data),

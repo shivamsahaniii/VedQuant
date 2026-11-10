@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, DbSession, owned_by
 from app.core.events import record_event
+from app.engine.builder import catalog as builder_catalog
 from app.models import Strategy, StrategyVersion, User
 from app.schemas.strategy import StrategyCreate, StrategyOut, StrategyStatusChange, StrategyUpdate
 from app.strategies.catalog import catalog
@@ -26,6 +27,12 @@ _MOVABLE = ("draft", "paused")
 @router.get("/templates")
 async def list_templates(_: CurrentUser) -> list[dict[str, Any]]:
     return catalog()
+
+
+@router.get("/builder")
+async def builder_options(_: CurrentUser) -> dict[str, Any]:
+    """Prices, indicators and comparisons the strategy builder offers."""
+    return builder_catalog()
 
 
 @router.get("", response_model=list[StrategyOut])
@@ -76,7 +83,7 @@ async def create_strategy(body: StrategyCreate, user: CurrentUser, db: DbSession
         user_id=user.id,
         name=body.name,
         section=body.section,
-        kind="template",
+        kind="builder" if body.params.builder is not None else "template",
         template_key=body.template_key,
         params=body.params.model_dump(mode="json"),
         status="draft",
@@ -131,6 +138,11 @@ async def update_strategy(
         content_changed = True
     if "params" in sent and body.params is not None:
         new_params = body.params.model_dump(mode="json")
+        if (new_params.get("builder") is not None) != (s.kind == "builder"):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Own rules belong to builder strategies only; create a new strategy instead",
+            )
         if new_params != s.params:
             s.params = new_params
             content_changed = True

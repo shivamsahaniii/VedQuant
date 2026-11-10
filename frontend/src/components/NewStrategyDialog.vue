@@ -5,7 +5,7 @@
         <header class="d-head">
           <div>
             <div class="step">Step {{ step }} of 2</div>
-            <h2 id="ns-title">{{ step === 1 ? 'Choose a strategy template' : 'Set up your strategy' }}</h2>
+            <h2 id="ns-title">{{ step === 1 ? 'Choose a template or build your own' : 'Set up your strategy' }}</h2>
           </div>
           <button class="icon-btn" aria-label="Close" @click="close"><AppIcon name="x" :size="18" /></button>
         </header>
@@ -20,12 +20,12 @@
               </div>
               <div class="tpl-name">{{ t.name }}</div>
               <div class="tpl-idea">{{ t.idea }}</div>
-              <div class="tpl-meta"><span>{{ t.timeframe }} candles</span><span>·</span><span>Signals in Phase {{ t.phase }}</span></div>
+              <div class="tpl-meta"><span>{{ t.timeframe }} candles</span><span>·</span><span>{{ t.section === 'intraday' ? 'Runs now' : 'Daily candles: later phase' }}</span></div>
             </button>
-            <button class="tpl builder" disabled>
-              <div class="tpl-top"><span class="tpl-icon"><AppIcon name="algo" :size="16" /></span><span class="tag">Phase 5</span></div>
+            <button class="tpl builder" :class="{ sel: selected?.key === 'builder' }" @click="selected = BUILDER" @dblclick="next">
+              <div class="tpl-top"><span class="tpl-icon"><AppIcon name="algo" :size="16" /></span><span class="tag accent">Your rules</span></div>
               <div class="tpl-name">Build from scratch</div>
-              <div class="tpl-idea">Pick indicators and conditions from dropdowns. No coding.</div>
+              <div class="tpl-idea">Pick prices, indicators and conditions from dropdowns. No coding.</div>
             </button>
           </div>
         </div>
@@ -57,7 +57,42 @@
               <input v-model="form.symbols" placeholder="e.g. RELIANCE, SBIN, INFY" />
               <span class="hint">Comma separated NSE symbols. Leave empty to use the scanner universe.</span>
             </label>
-            <div class="row">
+            <template v-if="isBuilder">
+              <div v-if="!builderOptions" class="hint">Loading the rule builder…</div>
+              <template v-else>
+                <RuleGroup v-model="rules.buy" side="buy" :options="builderOptions" />
+                <RuleGroup v-model="rules.sell" side="sell" :options="builderOptions" />
+                <p class="hint">Checked on every <strong>closed</strong> {{ form.timeframe }} candle. A match then goes through the same agents as every strategy: entry timing (09:30–14:30, no chasing), stop and target, odds, risk and sizing.</p>
+                <div class="row">
+                  <label>Market mood filter
+                    <select v-model="rules.mood">
+                      <option value="trend">Trend: only trade with the market</option>
+                      <option value="breakout">Breakout: with the market, skip weak days</option>
+                      <option value="reversion">Reversal: avoid fighting strong trends</option>
+                      <option value="off">Off: ignore the market mood</option>
+                    </select>
+                  </label>
+                  <label>Stop loss
+                    <select v-model="form.stopRule">
+                      <option value="auto">ATR × 1.5 (auto)</option>
+                      <option value="level">At the level that was crossed</option>
+                      <option value="or_mid">Middle of the opening range</option>
+                      <option value="pct">Fixed %</option>
+                    </select>
+                  </label>
+                </div>
+              </template>
+            </template>
+            <div class="row" v-if="isBuilder">
+              <label v-if="form.stopRule === 'pct'">Stop loss %
+                <input v-model="form.sl" type="number" min="0.1" max="50" step="0.1" required />
+              </label>
+              <label>Target (× the risk)
+                <input v-model="form.targetR" type="number" min="0.5" max="10" step="0.5" required />
+                <span class="hint">2 = aim to win twice what you risk</span>
+              </label>
+            </div>
+            <div class="row" v-else>
               <label>Stop loss %
                 <input v-model="form.sl" type="number" min="0.1" max="50" step="0.1" required />
               </label>
@@ -90,10 +125,11 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from './AppIcon.vue'
-import { errorMessage } from '../api/client'
+import RuleGroup from './RuleGroup.vue'
+import { errorMessage, strategiesApi } from '../api/client'
 import { useStrategiesStore } from '../stores/strategies'
 import { useUiStore } from '../stores/ui'
 import { ACTIVE_SECTIONS, SECTION_LABEL, TEMPLATES } from '../utils/strategies'
@@ -105,18 +141,30 @@ const step = ref(1)
 const selected = ref(null)
 const busy = ref(false)
 const error = ref('')
-const form = reactive({ name: '', section: 'intraday', timeframe: '5m', symbols: '', sl: 1, target: 2 })
+const form = reactive({ name: '', section: 'intraday', timeframe: '5m', symbols: '', sl: 1, target: 2, stopRule: 'auto', targetR: 2 })
+const BUILDER = { key: 'builder', name: 'Custom rules', idea: 'Your own conditions, checked on every closed candle.', section: 'intraday', timeframe: '5m' }
+const isBuilder = computed(() => selected.value?.key === 'builder')
+const builderOptions = ref(null)
+const newRules = () => ({
+  mood: 'trend',
+  buy: { match: 'all', conditions: [{ left: { kind: 'close', period: null, value: null, mult: 1 }, op: 'crosses_above', right: { kind: 'vwap', period: null, value: null, mult: 1 } }] },
+  sell: null,
+})
+const rules = ref(newRules())
 
 watch(() => ui.newStrategyOpen, (open) => {
   if (!open) return
   error.value = ''
-  selected.value = TEMPLATES.find((t) => t.key === ui.newStrategyTemplate) ?? null
+  selected.value = ui.newStrategyTemplate === 'builder' ? BUILDER : TEMPLATES.find((t) => t.key === ui.newStrategyTemplate) ?? null
+  rules.value = newRules()
+  form.stopRule = 'auto'; form.targetR = 2
+  if (!builderOptions.value) strategiesApi.builder().then((o) => { builderOptions.value = o }).catch((e) => { error.value = errorMessage(e) })
   step.value = selected.value ? 2 : 1
   if (selected.value) fill()
 })
 
 function fill() {
-  form.name = `My ${selected.value.name}`
+  form.name = isBuilder.value ? 'My strategy' : `My ${selected.value.name}`
   form.section = ui.newStrategySection !== undefined ? ui.newStrategySection : selected.value.section
   form.timeframe = selected.value.timeframe
 }
@@ -133,18 +181,26 @@ function close() {
 
 async function create() {
   error.value = ''
+  if (isBuilder.value && !rules.value.buy && !rules.value.sell) {
+    error.value = 'Turn on Buy or Sell and add at least one condition.'
+    return
+  }
   busy.value = true
   try {
+    const params = {
+      timeframe: form.timeframe,
+      symbols: form.symbols,
+      stop_loss_pct: String(form.sl),
+      target_pct: form.target === '' || form.target === null ? null : String(form.target),
+    }
+    if (isBuilder.value) {
+      Object.assign(params, { builder: rules.value, stop_rule: form.stopRule, target_r: String(form.targetR) })
+    }
     const s = await strategies.create({
       name: form.name,
-      template_key: selected.value.key,
+      template_key: isBuilder.value ? null : selected.value.key,
       section: form.section,
-      params: {
-        timeframe: form.timeframe,
-        symbols: form.symbols,
-        stop_loss_pct: String(form.sl),
-        target_pct: form.target === '' || form.target === null ? null : String(form.target),
-      },
+      params,
     })
     ui.closeNewStrategy()
     if (s.section && router.currentRoute.value.path !== `/${s.section}`) router.push(`/${s.section}`)
@@ -158,7 +214,7 @@ async function create() {
 
 <style scoped>
 .overlay { position: fixed; inset: 0; z-index: 100; background: rgba(9, 12, 20, 0.55); backdrop-filter: blur(2px); display: grid; place-items: center; padding: 16px; }
-.dialog { width: 100%; max-width: 760px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); }
+.dialog { width: 100%; max-width: 820px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); }
 .d-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 22px 14px; border-bottom: 1px solid var(--border); }
 .step { font-size: 0.75rem; font-weight: 600; color: var(--accent-text); text-transform: uppercase; letter-spacing: 0.05em; }
 .d-head h2 { margin: 2px 0 0; font-size: 1.15rem; }

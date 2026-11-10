@@ -1,23 +1,30 @@
+import { reactive } from 'vue'
+
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export const formatINR = (value) => (value === null || value === undefined ? '—' : inr.format(Number(value)))
 
 export const IST = 'Asia/Kolkata'
 
-// NSE regular session: Mon–Fri 09:15–15:30 IST. Exchange holidays are not considered yet.
+// NSE regular session: Mon–Fri 09:15–15:30 IST, minus exchange holidays (set by the admin;
+// loaded once from /market/holidays into `nseHolidays`).
+export const nseHolidays = reactive(new Set()) // reactive: screens update once it loads
+
 export function marketStatus(now = new Date()) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-GB', { timeZone: IST, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
       .formatToParts(now)
       .map((p) => [p.type, p.value]),
   )
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: IST }).format(now) // YYYY-MM-DD
   const minutes = Number(parts.hour) * 60 + Number(parts.minute)
   const weekday = !['Sat', 'Sun'].includes(parts.weekday)
   if (!weekday) return { open: false, label: 'Market closed', detail: 'Weekend' }
+  if (nseHolidays.has(today)) return { open: false, label: 'Market closed', detail: 'NSE holiday' }
   if (minutes < 9 * 60) return { open: false, label: 'Market closed', detail: 'Opens 09:15 IST' }
   if (minutes < 9 * 60 + 15) return { open: false, label: 'Pre-open', detail: 'Opens 09:15 IST' }
   if (minutes < 15 * 60 + 30) return { open: true, label: 'Market open', detail: 'Closes 15:30 IST' }
-  return { open: false, label: 'Market closed', detail: 'Opens next weekday 09:15 IST' }
+  return { open: false, label: 'Market closed', detail: 'Opens next trading day 09:15 IST' }
 }
 
 // "3 min ago", "in 5 h", ... for timestamps near now.

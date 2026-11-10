@@ -358,3 +358,36 @@ async def test_backfill_stops_at_once_without_a_data_plan(db: AsyncSession):
     with pytest.raises(DataPlanRequired):
         await backfill(adapter, sessionmaker, [("NSE", "SBIN"), ("NSE", "TCS")], at(10, 2), None)
     assert adapter.calls == 1  # not once per symbol and timeframe
+
+
+async def test_holidays_endpoint(db: AsyncSession):
+    from collections.abc import AsyncIterator
+
+    from httpx import ASGITransport, AsyncClient
+
+    from app.api.auth import login_limiter
+    from app.core.db import get_session
+    from app.main import app
+    from app.models import PlatformSetting
+
+    db.add(PlatformSetting(key="nse_holidays", value=["2026-11-24", "2026-11-10"]))
+    await db.flush()
+
+    async def _session() -> AsyncIterator[AsyncSession]:
+        yield db
+
+    app.dependency_overrides[get_session] = _session
+    login_limiter.clear()
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+            r = await c.post(
+                "/auth/signup", json={"email": "h@example.com", "password": "pw-long-enough-1"}
+            )
+            h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+            assert (await c.get("/market/holidays", headers=h)).json() == [
+                "2026-11-10",
+                "2026-11-24",
+            ]
+            assert (await c.get("/market/holidays")).status_code == 401
+    finally:
+        app.dependency_overrides.clear()

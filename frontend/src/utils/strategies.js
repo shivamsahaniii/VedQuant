@@ -19,7 +19,7 @@ export const STATUS_TONE = { draft: '', paper: 'accent', live: 'live', paused: '
 
 export function strategySummary(s) {
   const t = TEMPLATE_BY_KEY[s.template_key]
-  const parts = [t?.name ?? s.template_key, s.params?.timeframe]
+  const parts = [s.kind === 'builder' ? 'Custom rules' : t?.name ?? s.template_key, s.params?.timeframe]
   const n = s.params?.symbols?.length ?? 0
   parts.push(n ? `${n} symbol${n === 1 ? '' : 's'}` : 'Scanner universe')
   return parts.filter(Boolean).join(' · ')

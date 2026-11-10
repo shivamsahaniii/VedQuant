@@ -80,7 +80,8 @@ import { useMarketsStore } from '../stores/markets'
 import { useStrategiesStore } from '../stores/strategies'
 import { useSystemStore } from '../stores/system'
 import { useUiStore } from '../stores/ui'
-import { istClock, marketStatus } from '../utils/format'
+import { istClock, marketStatus, nseHolidays } from '../utils/format'
+import { marketsApi } from '../api/client'
 
 const auth = useAuthStore()
 const system = useSystemStore()
@@ -118,6 +119,7 @@ onMounted(async () => {
   document.addEventListener('click', onDocClick)
   try { if (!auth.user) await auth.loadMe() } catch { /* 401 handled globally */ }
   system.load()
+  marketsApi.holidays().then((days) => days.forEach((d) => nseHolidays.add(d))).catch(() => {})
   marketStore.connect() // keeps the feed status (and its alert banner) live on every page
 })
 onBeforeUnmount(() => { clearInterval(timer); document.removeEventListener('click', onDocClick); marketStore.disconnect() })

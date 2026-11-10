@@ -33,6 +33,7 @@ from app.data.source import (
     FEED_KEY,
     FeedStatus,
     can_see_feed,
+    load_calendar,
     parse_status,
     status_payload,
 )
@@ -53,6 +54,12 @@ def _sorted_quotes(raw: dict[str, str]) -> list[dict[str, Any]]:
 
 async def _feed() -> FeedStatus | None:
     return parse_status(await get_redis().get(FEED_KEY))
+
+
+@router.get("/market/holidays")
+async def holidays(_: CurrentUser, db: DbSession) -> list[str]:
+    """NSE holidays (platform setting), so screens don't call a holiday "market open"."""
+    return sorted(d.isoformat() for d in (await load_calendar(db)).holidays)
 
 
 @router.get("/market/feed")

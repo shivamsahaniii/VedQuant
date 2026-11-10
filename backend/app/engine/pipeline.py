@@ -18,10 +18,11 @@ from decimal import Decimal
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import record_event
+from app.engine.builder import scan_builder
 from app.engine.entry import EntryParams, decide_entry, trigger_key
 from app.engine.exit_plan import ExitParams, ExitPlan, Refused, plan_exit
 from app.engine.nse import TradingCalendar, ist, to_dec
@@ -122,7 +123,7 @@ async def running_strategies(
     q = select(Strategy).where(
         Strategy.status == "paper",
         Strategy.section.is_not(None),
-        Strategy.template_key.is_not(None),
+        or_(Strategy.template_key.is_not(None), Strategy.kind == "builder"),
     )
     if only_user is not None:  # a user's real feed trades only that user's strategies
         q = q.where(Strategy.user_id == only_user)
@@ -296,8 +297,12 @@ async def on_candle(
     cal = calendar or TradingCalendar()
     out: list[Signal] = []
     for strat in strategies:
-        rule_params = {strat.template_key: (strat.params or {}).get("rule")}
-        for hit in scan(symbol, df, ctx, rule_params):
+        p = strat.params or {}
+        if strat.kind == "builder" and p.get("builder"):
+            hits = scan_builder(symbol, df, ctx, p["builder"])
+        else:
+            hits = scan(symbol, df, ctx, {strat.template_key: p.get("rule")})
+        for hit in hits:
             sig = await process_hit(
                 db,
                 strat,

@@ -8,11 +8,68 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.engine.builder import MAX_CONDITIONS, OPERANDS
 from app.strategies.catalog import TEMPLATES
 
 Section = Literal["intraday", "swing", "options", "crypto"]
 Timeframe = Literal["1m", "5m", "15m", "1h", "1d"]
 _SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,30}$")
+
+
+# ---------------------------------------------------------------- builder ("Build from scratch")
+
+
+class Operand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal[tuple(OPERANDS)]  # type: ignore[valid-type]
+    period: int | None = Field(default=None, ge=1, le=200)
+    value: float | None = Field(default=None, ge=-1e9, le=1e9)
+    mult: float = Field(default=1, gt=0, le=100)
+
+    def model_post_init(self, _: Any) -> None:
+        meta = OPERANDS[self.kind]
+        if meta.period is None:
+            self.period = None  # this operand takes no period
+        else:
+            self.period = self.period or meta.period
+            if self.period > meta.max_period:
+                raise ValueError(f"{meta.label} period can be at most {meta.max_period}")
+        if self.kind == "number" and self.value is None:
+            raise ValueError("Enter a number")
+
+
+class Condition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    left: Operand
+    op: Literal["crosses_above", "crosses_below", "above", "below"]
+    right: Operand
+
+    def model_post_init(self, _: Any) -> None:
+        if self.left.kind == "number":
+            raise ValueError("The left side must be a price or an indicator, not a number")
+        if self.left == self.right:
+            raise ValueError("A condition must compare two different things")
+
+
+class ConditionGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    match: Literal["all", "any"] = "all"
+    conditions: list[Condition] = Field(min_length=1, max_length=MAX_CONDITIONS)
+
+
+class BuilderSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mood: Literal["trend", "breakout", "reversion", "off"] = "trend"
+    buy: ConditionGroup | None = None
+    sell: ConditionGroup | None = None
+
+    def model_post_init(self, _: Any) -> None:
+        if self.buy is None and self.sell is None:
+            raise ValueError("Add at least one buy or sell condition")
 
 
 class StrategyParams(BaseModel):
@@ -34,6 +91,7 @@ class StrategyParams(BaseModel):
     risk_per_trade_pct: Decimal = Field(
         default=Decimal("1"), gt=0, le=5, max_digits=4, decimal_places=2
     )
+    builder: BuilderSpec | None = None  # own rules instead of a template
 
     @field_validator("symbols", mode="before")
     @classmethod
@@ -62,8 +120,10 @@ def _clean_name(v: str) -> str:
 
 
 class StrategyCreate(BaseModel):
+    """From a template (`template_key`) or the user's own rules (`params.builder`), not both."""
+
     name: str = Field(min_length=1, max_length=60)
-    template_key: str
+    template_key: str | None = None
     section: Section | None = None
     params: StrategyParams = Field(default_factory=StrategyParams)
 
@@ -74,10 +134,15 @@ class StrategyCreate(BaseModel):
 
     @field_validator("template_key")
     @classmethod
-    def _known_template(cls, v: str) -> str:
-        if v not in TEMPLATES:
+    def _known_template(cls, v: str | None) -> str | None:
+        if v is not None and v not in TEMPLATES:
             raise ValueError(f"Unknown template: {v[:32]}")
         return v
+
+    def model_post_init(self, _: Any) -> None:
+        has_rules = self.params.builder is not None
+        if (self.template_key is None) == (not has_rules):
+            raise ValueError("Pick a template or build your own rules (one of the two)")
 
 
 class StrategyUpdate(BaseModel):
