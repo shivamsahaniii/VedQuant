@@ -155,7 +155,9 @@ const filled = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) =>
 async function saveAndTest() {
   error.value = ''
   const t = filled(trading.value)
-  const d = useTrading.value && sameKeys.value ? t : filled(data.value)
+  // "Same as trading keys": only the fields the data side has (the API key/secret stay trading-only)
+  const dataNames = new Set((choice.value.credential_fields.data ?? []).map((f) => f.name))
+  const d = useTrading.value && sameKeys.value ? Object.fromEntries(Object.entries(t).filter(([k]) => dataNames.has(k))) : filled(data.value)
   if (useTrading.value && !Object.keys(t).length) { error.value = 'Enter your trading keys, or untick “Trading keys”.'; return }
   if (useData.value && !Object.keys(d).length) { error.value = 'Enter your data keys, or untick “Data keys”.'; return }
   busy.value = true

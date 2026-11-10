@@ -220,3 +220,58 @@ async def test_auto_select_is_per_user(client, db, monkeypatch):
     await _dhan_tested(client, db, monkeypatch, h, uid)
     assert (await prefs_of(client, h))["stocks"] == "dhan"
     assert (await prefs_of(client, hb))["stocks"] == "paper"
+
+
+async def test_login_with_dhan_flow(client, db, monkeypatch):
+    from app.brokers.base import ConnectionReport
+    from app.brokers.dhan import DhanBroker
+    from app.brokers.service import load_credentials
+
+    h, uid = await signup(client)
+    acct = (
+        await client.post("/brokers", headers=h, json={"broker": "dhan", "label": "Main"})
+    ).json()
+    keys = {"client_id": "1100", "api_key": "app-key-1234", "api_secret": "app-secret-9876"}
+    r = await client.put(
+        f"/brokers/{acct['id']}/credentials/trading", headers=h, json={"fields": keys}
+    )
+    assert r.status_code == 200, r.text
+
+    # Finishing without starting is refused.
+    assert (
+        await client.post("/brokers/dhan/complete", headers=h, json={"token_id": "tok-1"})
+    ).status_code == 409
+
+    async def fake_url(self):
+        return "https://auth.dhan.co/login/consentApp-login?consentAppId=c-1"
+
+    async def fake_consume(self, token_id):
+        assert token_id == "tok-1"
+        return "fresh-access-token", None
+
+    async def fake_test(self):
+        assert self.credentials.trading["access_token"] == "fresh-access-token"
+        return ConnectionReport(ok=True, message="Connected to Dhan", purpose_ok={"trading": True})
+
+    monkeypatch.setattr(DhanBroker, "login_url", fake_url)
+    monkeypatch.setattr(DhanBroker, "consume_login", fake_consume)
+    monkeypatch.setattr(DhanBroker, "test_connection", fake_test)
+
+    r = await client.post(f"/brokers/{acct['id']}/dhan/login", headers=h)
+    assert r.json()["login_url"].startswith("https://auth.dhan.co/")
+    hb, _ = await signup(client, "b@example.com")  # another user cannot finish your login
+    assert (
+        await client.post("/brokers/dhan/complete", headers=hb, json={"token_id": "tok-1"})
+    ).status_code == 409
+
+    r = await client.post("/brokers/dhan/complete", headers=h, json={"token_id": "tok-1"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["ok"] and out["account"]["status"] == "connected"
+    assert "fresh-access-token" not in r.text  # the token never leaves the server
+    stored = await db.get(BrokerAccount, uuid.UUID(acct["id"]))
+    assert (await load_credentials(db, stored)).trading["access_token"] == "fresh-access-token"
+    # One use only.
+    assert (
+        await client.post("/brokers/dhan/complete", headers=h, json={"token_id": "tok-1"})
+    ).status_code == 409

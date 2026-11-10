@@ -47,6 +47,10 @@ from app.brokers.base import (
 from app.core.logging import get_logger, register_secret
 
 API_BASE = "https://api.dhan.co/v2"
+AUTH_BASE = "https://auth.dhan.co"
+# Where Dhan sends the browser back after "Login with Dhan" (entered by the user as the API key's
+# Redirect URL on web.dhan.co). The frontend route reads `tokenId` and hands it to our API.
+REDIRECT_PATH = "/dhan/callback"
 FEED_URL = "wss://api-feed.dhan.co"
 SCRIP_MASTER_URL = "https://images.dhan.co/api-data/api-scrip-master.csv"
 IST = ZoneInfo("Asia/Kolkata")
@@ -125,7 +129,22 @@ class DhanBroker(BrokerAdapter):
                 "access_token",
                 "Access token",
                 help="web.dhan.co > My Profile > Access DhanHQ APIs > generate Access Token. "
-                "Valid for 24 hours.",
+                "Valid for 24 hours. Or leave it empty and use the API key below with "
+                "'Login with Dhan'.",
+            ),
+            FieldSpec(
+                "api_key",
+                "API key (optional)",
+                required=False,
+                help="For one-click 'Login with Dhan' each day instead of pasting a token. "
+                "web.dhan.co > Access DhanHQ APIs > API key. Set its Redirect URL to "
+                "<this site>/dhan/callback.",
+            ),
+            FieldSpec(
+                "api_secret",
+                "API secret (optional)",
+                required=False,
+                help="Shown with the API key on web.dhan.co. Valid for 12 months.",
             ),
         ],
         "data": [
@@ -155,7 +174,8 @@ class DhanBroker(BrokerAdapter):
     ) -> None:
         super().__init__(credentials, live_enabled=live_enabled)
         for purpose in ("trading", "data"):
-            register_secret(self.credentials.for_purpose(purpose).get("access_token"))
+            for name in ("access_token", "api_secret"):
+                register_secret(self.credentials.for_purpose(purpose).get(name))
         self._transport = transport
         self._http: httpx.AsyncClient | None = None
         self._ws_connect = ws_connect
@@ -179,6 +199,60 @@ class DhanBroker(BrokerAdapter):
         if self._http is not None:
             await self._http.aclose()
             self._http = None
+
+    # ------------------------------------------------------------ "Login with Dhan" (API key)
+
+    def _app_headers(self) -> dict[str, str]:
+        t = self.credentials.trading
+        if not (t.get("client_id") and t.get("api_key") and t.get("api_secret")):
+            raise BrokerAuthError(
+                "Dhan: add your Client ID, API key and API secret first (Settings > Dhan > "
+                "Trading keys)"
+            )
+        return {"app_id": t["api_key"], "app_secret": t["api_secret"], "Accept": "application/json"}
+
+    async def _auth_call(self, method: str, path: str, params: dict[str, str]) -> dict[str, Any]:
+        headers = self._app_headers()
+        try:
+            async with httpx.AsyncClient(
+                base_url=AUTH_BASE, timeout=httpx.Timeout(20.0), transport=self._transport
+            ) as c:
+                resp = await c.request(method, path, params=params, headers=headers)
+        except httpx.HTTPError as exc:
+            raise BrokerError(f"Dhan: network error on {path}: {type(exc).__name__}") from None
+        try:
+            body = resp.json() if resp.content else {}
+        except ValueError:
+            body = {}
+        if not resp.is_success or not isinstance(body, dict):
+            msg = body.get("message") or body.get("errorMessage") if isinstance(body, dict) else ""
+            raise BrokerAuthError(
+                f"Dhan login step failed ({resp.status_code}): {msg or resp.reason_phrase}"
+            )
+        return body
+
+    async def login_url(self) -> str:
+        """Step 1: a one-time consent; the user then logs in on Dhan's own page (step 2)."""
+        body = await self._auth_call(
+            "POST", "/app/generate-consent", {"client_id": self.credentials.trading["client_id"]}
+        )
+        consent = body.get("consentAppId")
+        if not consent:
+            raise BrokerError("Dhan did not return a consent id")
+        return f"{AUTH_BASE}/login/consentApp-login?consentAppId={consent}"
+
+    async def consume_login(self, token_id: str) -> tuple[str, datetime | None]:
+        """Step 3: swap the tokenId from the redirect for a 24-hour access token."""
+        # TODO(verify): the docs' curl example has no method, i.e. GET.
+        body = await self._auth_call("GET", "/app/consumeApp-consent", {"tokenId": token_id})
+        token = body.get("accessToken")
+        if not token:
+            raise BrokerAuthError("Dhan did not return an access token")
+        register_secret(token)
+        client = str(body.get("dhanClientId") or "")
+        if client and client != self.credentials.trading.get("client_id"):
+            raise BrokerAuthError("You logged in to a different Dhan account than this one")
+        return token, _parse_token_validity(body.get("expiryTime"))
 
     def _purpose_for_data(self) -> Purpose:
         """Data calls use the data key; fall back to the trading key if only that exists."""
@@ -584,13 +658,16 @@ def _chunks(start: datetime, end: datetime, max_days: int) -> list[tuple[datetim
 
 
 def _parse_token_validity(value: str | None) -> datetime | None:
-    """Profile 'tokenValidity' like '30/03/2025 15:37' (IST) -> aware datetime."""
+    """Profile 'tokenValidity' like '30/03/2025 15:37', or the login's ISO 'expiryTime' like
+    '2025-09-23T12:37:23' (both IST) -> aware datetime."""
     if not value:
         return None
-    try:
-        return datetime.strptime(value, "%d/%m/%Y %H:%M").replace(tzinfo=IST)
-    except ValueError:
-        return None
+    for fmt in ("%d/%m/%Y %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(str(value)[:19], fmt).replace(tzinfo=IST)
+        except ValueError:
+            continue
+    return None
 
 
 async def _default_ws_connect(url: str) -> Any:

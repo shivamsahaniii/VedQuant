@@ -402,9 +402,13 @@ def test_feed_url_token_masked_in_logs() -> None:
 def test_dhan_in_registry_with_form_fields() -> None:
     dhan = {b["key"]: b for b in registry.available()}["dhan"]
     assert dhan["display_name"] == "Dhan"
+    expected = {
+        "trading": ["client_id", "access_token", "api_key", "api_secret"],  # key: Login with Dhan
+        "data": ["client_id", "access_token"],
+    }
     for purpose in ("trading", "data"):
         names = [f["name"] for f in dhan["credential_fields"][purpose]]
-        assert names == ["client_id", "access_token"]
+        assert names == expected[purpose]
         token_field = dhan["credential_fields"][purpose][1]
         assert token_field["secret"] is True and token_field["help"]
     assert isinstance(registry.create_adapter("dhan", CREDS), DhanBroker)
@@ -442,3 +446,64 @@ async def test_trading_key_without_data_plan_passes_with_a_note() -> None:
     report = await broker.test_connection()
     assert report.ok and report.purpose_ok == {"trading": True}
     assert "Data API plan is not active" in report.message
+
+
+# ---------------------------------------------------------------- Login with Dhan (API key)
+
+APP_CREDS = BrokerCredentials(
+    trading={"client_id": CLIENT, "api_key": "app-key-1234", "api_secret": "app-secret-9876"}
+)
+
+
+async def test_login_url_uses_the_api_key_headers() -> None:
+    broker, fake = make(
+        {("POST", "/app/generate-consent"): (200, {"consentAppId": "c-123", "status": "success"})},
+        APP_CREDS,
+    )
+    url = await broker.login_url()
+    assert url == "https://auth.dhan.co/login/consentApp-login?consentAppId=c-123"
+    req = fake.requests[0]
+    assert req.url.host == "auth.dhan.co" and req.url.params["client_id"] == CLIENT
+    assert (
+        req.headers["app_id"] == "app-key-1234" and req.headers["app_secret"] == "app-secret-9876"
+    )
+
+
+async def test_consume_login_returns_token_and_expiry() -> None:
+    broker, _ = make(
+        {
+            ("GET", "/app/consumeApp-consent"): (
+                200,
+                {
+                    "dhanClientId": CLIENT,
+                    "accessToken": "new-token-xyz",
+                    "expiryTime": "2026-11-11T09:30:00",
+                },
+            )
+        },
+        APP_CREDS,
+    )
+    token, expires = await broker.consume_login("tok-1")
+    assert token == "new-token-xyz"
+    assert (
+        expires is not None
+        and expires.hour == 9
+        and expires.utcoffset() == timedelta(hours=5, minutes=30)
+    )
+
+
+async def test_login_refuses_another_account_and_missing_keys() -> None:
+    broker, _ = make(
+        {("GET", "/app/consumeApp-consent"): (200, {"dhanClientId": "999", "accessToken": "t"})},
+        APP_CREDS,
+    )
+    with pytest.raises(BrokerAuthError, match="different Dhan account"):
+        await broker.consume_login("tok-1")
+    broker, _ = make({}, CREDS)  # token only, no API key
+    with pytest.raises(BrokerAuthError, match="API key"):
+        await broker.login_url()
+    broker, _ = make(
+        {("POST", "/app/generate-consent"): (400, {"message": "Consent limit Exceeded"})}, APP_CREDS
+    )
+    with pytest.raises(BrokerAuthError, match="Consent limit"):
+        await broker.login_url()

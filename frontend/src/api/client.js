@@ -75,6 +75,8 @@ export const brokersApi = {
   removeKeys: (id, purpose) => api.delete(`/brokers/${id}/credentials/${purpose}`).then((r) => r.data),
   test: (id) => api.post(`/brokers/${id}/test`, null, { timeout: 45000 }).then((r) => r.data),
   disconnect: (id) => api.delete(`/brokers/${id}`),
+  dhanLogin: (id) => api.post(`/brokers/${id}/dhan/login`).then((r) => r.data),
+  dhanComplete: (tokenId) => api.post('/brokers/dhan/complete', { token_id: tokenId }, { timeout: 45000 }).then((r) => r.data),
 }
 
 export const strategiesApi = {

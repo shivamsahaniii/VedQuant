@@ -370,9 +370,6 @@ async def test_holidays_endpoint(db: AsyncSession):
     from app.main import app
     from app.models import PlatformSetting
 
-    db.add(PlatformSetting(key="nse_holidays", value=["2026-11-24", "2026-11-10"]))
-    await db.flush()
-
     async def _session() -> AsyncIterator[AsyncSession]:
         yield db
 
@@ -384,6 +381,10 @@ async def test_holidays_endpoint(db: AsyncSession):
                 "/auth/signup", json={"email": "h@example.com", "password": "pw-long-enough-1"}
             )
             h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+            # Added after sign-up (which commits) so the test's rollback removes it again:
+            # platform_settings is not truncated between tests.
+            db.add(PlatformSetting(key="nse_holidays", value=["2026-11-24", "2026-11-10"]))
+            await db.flush()
             assert (await c.get("/market/holidays", headers=h)).json() == [
                 "2026-11-10",
                 "2026-11-24",

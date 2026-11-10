@@ -19,6 +19,7 @@ const router = createRouter({
         { path: 'swing', name: 'swing', component: () => import('../views/SwingView.vue'), meta: { title: 'Swing' } },
         { path: 'paper', name: 'paper', component: () => import('../views/PaperTradingView.vue'), meta: { title: 'Paper Trading' } },
         { path: 'live', name: 'live', component: () => import('../views/LiveTradingView.vue'), meta: { title: 'Live Trading' } },
+        { path: 'dhan/callback', name: 'dhan-callback', component: () => import('../views/DhanCallbackView.vue'), meta: { title: 'Dhan login' } },
         { path: 'settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { title: 'Settings' } },
       ],
     },

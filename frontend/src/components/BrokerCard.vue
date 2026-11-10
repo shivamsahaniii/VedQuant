@@ -44,6 +44,19 @@
     </div>
     <p v-else class="paper-note">Simulated broker with ₹1,00,000 virtual money. No API keys needed.</p>
 
+    <div v-if="account.broker === 'dhan'" class="dhan-login">
+      <div class="dl-text">
+        <b>Daily login</b>
+        <span v-if="hasApiKey">Click to log in on Dhan's page; a fresh 24-hour token is saved here by itself.</span>
+        <span v-else>Optional: add your Dhan <b>API key + secret</b> under Trading keys to log in with one click each day instead of pasting a token.</span>
+        <span class="redirect">Redirect URL for Dhan: <code>{{ redirectUrl }}</code>
+          <button class="btn ghost xs" type="button" @click="copyRedirect">{{ copied ? 'Copied' : 'Copy' }}</button></span>
+      </div>
+      <button v-if="hasApiKey" class="btn primary sm" :disabled="busy" @click="dhanLogin">
+        <AppIcon name="power" :size="14" /> Login with Dhan
+      </button>
+    </div>
+
     <footer class="bc-foot">
       <button class="btn ghost sm" :disabled="busy" @click="test">
         <AppIcon name="power" :size="14" /> {{ testing ? 'Testing…' : 'Test connection' }}
@@ -62,7 +75,7 @@
 import { computed, ref } from 'vue'
 import AppIcon from './AppIcon.vue'
 import KeysDialog from './KeysDialog.vue'
-import { errorMessage } from '../api/client'
+import { brokersApi, errorMessage } from '../api/client'
 import { useBrokersStore } from '../stores/brokers'
 import { formatINR, istDateTime, relativeTime } from '../utils/format'
 
@@ -85,11 +98,30 @@ const expiringSoon = computed(() => {
   const t = props.account.token_expires_at
   return t && new Date(t).getTime() - Date.now() < 3 * 3600 * 1000
 })
+const hasApiKey = computed(() => ['api_key', 'api_secret'].every((n) => props.account.credentials.trading.fields.find((f) => f.name === n)?.saved))
+const redirectUrl = `${window.location.origin}/dhan/callback`
+const copied = ref(false)
+async function copyRedirect() {
+  try { await navigator.clipboard.writeText(redirectUrl); copied.value = true; setTimeout(() => { copied.value = false }, 2000) } catch { /* clipboard blocked: the URL is shown */ }
+}
+async function dhanLogin() {
+  busy.value = true
+  message.value = ''
+  try {
+    const { login_url: url } = await brokersApi.dhanLogin(props.account.id)
+    if (!url.startsWith('https://auth.dhan.co/')) throw new Error('unexpected login page')
+    window.location.assign(url) // Dhan's own login page; it sends you back to /dhan/callback
+  } catch (e) {
+    messageOk.value = false
+    message.value = errorMessage(e)
+    busy.value = false
+  }
+}
 const anySaved = (p) => props.account.credentials[p].fields.some((f) => f.saved)
 
 function showResult(r) {
   messageOk.value = r.ok
-  message.value = r.ok ? 'Connection OK' : 'Test failed'
+  message.value = r.message || (r.ok ? 'Connection OK' : 'Test failed')
   lastFunds.value = r.funds_available ?? null
 }
 
@@ -155,4 +187,9 @@ async function disconnect() {
 .badText { color: var(--bad); }
 .disconnect { margin-left: auto; }
 @media (max-width: 640px) { .purposes { grid-template-columns: 1fr; } }
+.dhan-login { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 0 18px 14px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); font-size: 0.83rem; }
+.dl-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 260px; color: var(--text-2); }
+.redirect { color: var(--muted); overflow-wrap: anywhere; }
+.redirect code { color: var(--text); }
+.btn.xs { padding: 2px 8px; font-size: 0.75rem; margin-left: 4px; }
 </style>

@@ -144,7 +144,7 @@ async def test_partial_update_keeps_other_fields(client: AsyncClient) -> None:
 
 @pytest.mark.parametrize(
     "fields",
-    [{"api_secret": "x" * 10}, {"access_token": "   "}, {}],
+    [{"password": "x" * 10}, {"access_token": "   "}, {}],
 )
 async def test_bad_credentials_rejected(client: AsyncClient, fields: dict) -> None:
     h = await user(client, "bad@example.com")

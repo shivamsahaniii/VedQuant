@@ -10,20 +10,25 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from app.api.connections import auto_use_broker, release_broker
 from app.api.deps import CurrentUser, DbSession, owned_by
 from app.brokers import registry
+from app.brokers.base import BrokerError
+from app.brokers.dhan import DhanBroker
 from app.brokers.service import (
     CredentialError,
     credential_rows,
     field_specs,
+    load_credentials,
     remove_credentials,
     run_connection_test,
     save_credentials,
 )
 from app.core.events import record_event
+from app.core.redis import get_redis
 from app.core.security import decrypt
 from app.models import BrokerAccount, User
 from app.schemas.broker import (
@@ -172,7 +177,75 @@ async def delete_credentials(
 async def test_account(
     account_id: uuid.UUID, user: CurrentUser, db: DbSession
 ) -> ConnectionTestOut:
+    return await _test(db, user, await _get_owned(db, user, account_id))
+
+
+# ---------------------------------------------------------------- "Login with Dhan" (API key)
+
+DHAN_LOGIN_KEY = "vq:dhan_login:{user_id}"  # which account a pending Dhan login is for
+DHAN_LOGIN_TTL_S = 900
+
+
+class DhanLoginOut(BaseModel):
+    login_url: str
+
+
+class DhanLoginDone(BaseModel):
+    token_id: str = Field(min_length=4, max_length=4096)
+
+
+@router.post("/{account_id}/dhan/login", response_model=DhanLoginOut)
+async def dhan_login(account_id: uuid.UUID, user: CurrentUser, db: DbSession) -> DhanLoginOut:
+    """Step 1: get Dhan's login page for this account. The browser goes there, the user logs in
+    on Dhan, and Dhan sends the browser back to <site>/dhan/callback?tokenId=..."""
     acct = await _get_owned(db, user, account_id)
+    if acct.broker != "dhan":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only Dhan accounts use Dhan login")
+    adapter = DhanBroker(await load_credentials(db, acct))
+    try:
+        url = await adapter.login_url()
+    except BrokerError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+    finally:
+        await adapter.close()
+    await get_redis().set(DHAN_LOGIN_KEY.format(user_id=user.id), str(acct.id), ex=DHAN_LOGIN_TTL_S)
+    return DhanLoginOut(login_url=url)
+
+
+@router.post("/dhan/complete", response_model=ConnectionTestOut)
+async def dhan_complete(body: DhanLoginDone, user: CurrentUser, db: DbSession) -> ConnectionTestOut:
+    """Step 3: the callback page hands over Dhan's tokenId; we swap it for a 24-hour access token,
+    store it encrypted (never returned), and test the connection."""
+    redis = get_redis()
+    key = DHAN_LOGIN_KEY.format(user_id=user.id)
+    pending = await redis.get(key)
+    if not pending:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No Dhan login was started (or it took over 15 minutes). Start it again in Settings.",
+        )
+    await redis.delete(key)  # one use
+    acct = await _get_owned(db, user, uuid.UUID(pending))
+    adapter = DhanBroker(await load_credentials(db, acct))
+    try:
+        token, expires = await adapter.consume_login(body.token_id)
+    except BrokerError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+    finally:
+        await adapter.close()
+    await save_credentials(db, acct, "trading", {"access_token": token})
+    creds = await load_credentials(db, acct)
+    if creds.data.get("access_token"):  # a separate data token would win: keep both fresh
+        await save_credentials(db, acct, "data", {"access_token": token})
+    acct.token_expires_at = expires
+    await record_event(
+        db, "broker", "dhan login", user_id=user.id, broker="dhan", account_id=str(acct.id)
+    )
+    await db.flush()
+    return await _test(db, user, acct)
+
+
+async def _test(db: DbSession, user: User, acct: BrokerAccount) -> ConnectionTestOut:
     report = await run_connection_test(db, acct)
     switched: list[str] = []
     if report.ok and report.purpose_ok.get("data", True) and acct.status == "connected":
