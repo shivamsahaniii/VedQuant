@@ -164,3 +164,59 @@ async def test_watchlists_are_per_user(client):
     cat = (await client.get("/markets/catalog?asset=crypto", headers=ha)).json()["items"]
     assert all(i["asset_class"] == "crypto" for i in cat)
     assert {i["symbol"] for i in cat if i["followed"]} == {"BTCUSDT", "ETHUSDT"}
+
+
+async def _dhan_tested(client, db, monkeypatch, h, uid, ok=True):
+    """Add a Dhan account and run its test (the broker call is faked)."""
+    from app.api import brokers as brokers_api
+    from app.brokers.base import ConnectionReport
+
+    acct = BrokerAccount(user_id=uuid.UUID(uid), broker="dhan", label="Main", status="new")
+    db.add(acct)
+    await db.commit()
+
+    async def fake_test(_db, a):
+        a.status = "connected" if ok else "error"
+        return ConnectionReport(
+            ok=ok,
+            message="Connected." if ok else "Bad token.",
+            purpose_ok={"data": ok, "trading": ok},
+        )
+
+    monkeypatch.setattr(brokers_api, "run_connection_test", fake_test)
+    r = await client.post(f"/brokers/{acct.id}/test", headers=h)
+    assert r.status_code == 200
+    return acct, r.json()
+
+
+async def prefs_of(client, h):
+    return (await client.get("/connectors", headers=h)).json()["preferences"]["data_sources"]
+
+
+async def test_tested_dhan_becomes_the_data_source_automatically(client, db, monkeypatch):
+    h, uid = await signup(client)
+    assert (await prefs_of(client, h))["stocks"] == "paper"
+    acct, r = await _dhan_tested(client, db, monkeypatch, h, uid)
+    assert "Real prices for indices and stocks" in r["message"]
+    src = await prefs_of(client, h)
+    assert src["indices"] == "dhan" and src["stocks"] == "dhan" and src["crypto"] is None
+
+    # Disconnecting the only Dhan account puts both markets back on simulated prices.
+    assert (await client.delete(f"/brokers/{acct.id}", headers=h)).status_code == 204
+    src = await prefs_of(client, h)
+    assert src["indices"] == "paper" and src["stocks"] == "paper"
+
+
+async def test_failed_test_keeps_simulated_prices(client, db, monkeypatch):
+    h, uid = await signup(client)
+    _, r = await _dhan_tested(client, db, monkeypatch, h, uid, ok=False)
+    assert "Real prices" not in r["message"]
+    assert (await prefs_of(client, h))["stocks"] == "paper"
+
+
+async def test_auto_select_is_per_user(client, db, monkeypatch):
+    h, uid = await signup(client)
+    hb, _ = await signup(client, "b@example.com")
+    await _dhan_tested(client, db, monkeypatch, h, uid)
+    assert (await prefs_of(client, h))["stocks"] == "dhan"
+    assert (await prefs_of(client, hb))["stocks"] == "paper"

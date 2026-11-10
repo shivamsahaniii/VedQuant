@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { brokersApi } from '../api/client'
+import { useMarketsStore } from './markets'
 
 export const useBrokersStore = defineStore('brokers', () => {
   const accounts = ref([])
@@ -41,12 +42,18 @@ export const useBrokersStore = defineStore('brokers', () => {
   async function test(id) {
     const result = await brokersApi.test(id)
     upsert(result.account)
+    refreshConnections() // a passing test may switch Indices/Stocks data to this account
     return result
   }
 
   async function disconnect(id) {
     await brokersApi.disconnect(id)
     accounts.value = accounts.value.filter((a) => a.id !== id)
+    refreshConnections() // the last account gone: markets fall back to simulated prices
+  }
+
+  function refreshConnections() {
+    useMarketsStore().loadConnectors().catch(() => {})
   }
 
   function reset() {

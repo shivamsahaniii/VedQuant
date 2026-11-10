@@ -5,6 +5,7 @@
         <h2>What VedQuant uses</h2>
         <span class="muted small">Your choice, per market</span>
       </div>
+      <p class="hint">Connect and test a broker (Dhan) and Indices and Stocks switch to its real prices on their own. No broker connected means simulated prices. Trading stays paper (virtual money) either way.</p>
       <div class="prefs">
         <label v-for="a in ASSETS" :key="a.key" class="pref">
           <span class="pref-label"><AppIcon :name="a.icon" :size="15" /> {{ a.label }} data</span>
@@ -104,7 +105,7 @@ async function save(body, msg) {
   try { await markets.savePreferences(body); note.value = msg } catch (e) { error.value = errorMessage(e) } finally { busy.value = false }
 }
 const setSource = (asset, key) => save({ data_sources: { [asset]: key || null } },
-  key && key !== 'paper' ? 'Saved. The live feed from your own account is being added next; until then prices stay simulated.' : 'Saved.')
+  key && key !== 'paper' ? 'Saved. Real prices start within a minute during market hours (09:00–15:35 IST).' : 'Saved. Simulated prices for this market.')
 const setChart = (key) => save({ chart_provider: key }, 'Saved. Open Markets to see the chart.')
 
 async function request(c) {
@@ -121,6 +122,7 @@ async function request(c) {
 .pref { display: flex; flex-direction: column; gap: 6px; }
 .pref-label { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; color: var(--text-2); }
 .pref select { font: inherit; font-size: 0.88rem; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+.hint { margin: 0; padding: 12px 18px 0; font-size: 0.84rem; color: var(--text-2); }
 .note { margin: 0 18px 14px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--info-soft); color: var(--info); font-size: 0.85rem; }
 .error.inline { margin: 0 18px 14px; }
 .conn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding: 16px 18px; }

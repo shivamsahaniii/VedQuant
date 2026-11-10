@@ -137,3 +137,52 @@ async def request_counts(db: AsyncSession) -> dict[str, int]:
         for k in r.value or []:
             counts[k] = counts.get(k, 0) + 1
     return counts
+
+
+AUTO_ASSETS: tuple[AssetClass, ...] = ("indices", "stocks")
+
+
+async def auto_use_broker(db: AsyncSession, user: User, broker: str) -> list[str]:
+    """A broker account just passed its test: use it for Indices/Stocks data where the user is still
+    on simulated prices. A real source the user picked themselves is never replaced.
+    Returns the markets that were switched (caller commits)."""
+    c = next((x for x in CONNECTORS if x.broker_key == broker and x.key != "paper"), None)
+    if c is None or c.status != "available" or "market data" not in c.provides:
+        return []
+    prefs = await get_prefs(db, user)
+    switched = [
+        a for a in AUTO_ASSETS if a in c.assets and prefs["data_sources"].get(a) in (None, "paper")
+    ]
+    if switched:
+        for a in switched:
+            prefs["data_sources"][a] = c.key
+        await set_setting(db, user, PREFS_KEY, prefs)
+        await record_event(
+            db,
+            "system",
+            "data source auto-selected",
+            user_id=user.id,
+            source=c.key,
+            markets=switched,
+        )
+    return switched
+
+
+async def release_broker(db: AsyncSession, user: User, broker: str) -> list[str]:
+    """The user's last account of this broker is gone: markets that used it go back to simulated
+    prices (the feed would fall back anyway; this keeps Settings honest). Caller commits."""
+    left = await db.scalar(
+        select(BrokerAccount.id).where(
+            BrokerAccount.user_id == user.id, BrokerAccount.broker == broker
+        )
+    )
+    if left is not None:
+        return []
+    keys = {c.key for c in CONNECTORS if c.broker_key == broker and c.key != "paper"}
+    prefs = await get_prefs(db, user)
+    released = [a for a, k in prefs["data_sources"].items() if k in keys]
+    if released:
+        for a in released:
+            prefs["data_sources"][a] = "paper" if a in AUTO_ASSETS else None
+        await set_setting(db, user, PREFS_KEY, prefs)
+    return released

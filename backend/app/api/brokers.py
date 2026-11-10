@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy.exc import IntegrityError
 
+from app.api.connections import auto_use_broker, release_broker
 from app.api.deps import CurrentUser, DbSession, owned_by
 from app.brokers import registry
 from app.brokers.service import (
@@ -173,6 +174,9 @@ async def test_account(
 ) -> ConnectionTestOut:
     acct = await _get_owned(db, user, account_id)
     report = await run_connection_test(db, acct)
+    switched: list[str] = []
+    if report.ok and report.purpose_ok.get("data", True) and acct.status == "connected":
+        switched = await auto_use_broker(db, user, acct.broker)
     await record_event(
         db,
         "broker",
@@ -186,9 +190,12 @@ async def test_account(
     )
     await db.commit()
     await db.refresh(acct)
+    message = acct.last_error or report.message
+    if switched:
+        message += f" Real prices for {' and '.join(switched)} now come from this account."
     return ConnectionTestOut(
         ok=report.ok,
-        message=acct.last_error or report.message,
+        message=message,
         purpose_ok=report.purpose_ok,
         funds_available=report.funds.available if report.funds else None,
         token_expires_at=report.token_expires_at,
@@ -209,5 +216,7 @@ async def disconnect(account_id: uuid.UUID, user: CurrentUser, db: DbSession) ->
         account_id=str(acct.id),
     )
     await db.delete(acct)
+    await db.flush()
+    await release_broker(db, user, acct.broker)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
