@@ -14,7 +14,7 @@ Detailed steps live in the phase files; this page is the one-glance status.
 | Paper trading engine (agent team) | 🟡 22/32 | All 9 agents built and running; waiting on the first real-market session |
 | Connections & Markets | 🟡 | Provider catalog, per-market data source, chart provider, Indices/Stocks/Crypto lists, candlestick charts |
 | Real-price paper trading | 🟢 Dhan connected, Data plan active (to 9 Dec), 60 days of real 5m history loaded | Live ticks start on the first trading day (11 Nov); full replay of 9 Nov through all agents passed |
-| Phase 2: Strategies & backtesting | 🟡 4/13 | Rules done; **no backtester yet** |
+| Phase 2: Strategies & backtesting | 🟡 | Rules + **backtester** (`python -m app.backtest.run`); first report: [backtest-2026-11-10.md](backtest-2026-11-10.md), no strategy profitable yet |
 | Phase 3: Scanner, risk, paper | 🟡 3/16 (+5 partly) | Scanner loop, paper order manager, dashboard done |
 | Phase 4: Small live | ⬜ 0/10 | Blocked by 3 open questions (section 6) |
 | Phase 5: Expansion | ⬜ 0/13 | Swing, no-code builder, reports, PWA |

@@ -49,7 +49,8 @@
               </label>
               <label>Timeframe
                 <select v-model="form.timeframe">
-                  <option v-for="tf in ['1m', '5m', '15m', '1h', '1d']" :key="tf" :value="tf">{{ tf }}</option>
+                  <!-- The live feed builds 1m and 5m candles; 1d is for swing (later phase). -->
+                  <option v-for="tf in ['1m', '5m', '1d']" :key="tf" :value="tf">{{ tf === '1d' ? '1d (swing, later phase)' : tf }}</option>
                 </select>
               </label>
             </div>

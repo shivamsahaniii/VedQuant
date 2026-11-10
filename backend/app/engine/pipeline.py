@@ -193,7 +193,10 @@ async def process_hit(
                 if isinstance(odds, NoOdds)
                 else {"available": True, **odds.as_dict()}
             )
-            await _risk_and_trade(db, strat, sig, plan, p, now, decision.entry_price, key)
+            if p.get("odds_filter") and not isinstance(odds, NoOdds) and odds.lean == "stop":
+                sig.status_reason = f"Odds filter: {odds.verdict}"
+            else:
+                await _risk_and_trade(db, strat, sig, plan, p, now, decision.entry_price, key)
 
     db.add(sig)
     await db.flush()

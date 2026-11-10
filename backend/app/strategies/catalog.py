@@ -41,7 +41,7 @@ TEMPLATES: dict[str, TemplateInfo] = {
             "Supertrend",
             "Enter when the Supertrend line flips.",
             "intraday",
-            "15m",
+            "5m",
             2,
         ),
         TemplateInfo(

@@ -259,3 +259,33 @@ async def test_handlers_publish_and_close(db: AsyncSession):
     t = await db.scalar(select(Trade))
     assert t.exit_reason == "stop" and t.net_pnl < 0
     assert await db.scalar(select(func.count()).select_from(Signal)) == 1
+
+
+async def test_odds_filter_skips_setups_leaning_to_the_stop(db: AsyncSession, monkeypatch):
+    from app.engine import pipeline
+    from app.engine.odds import Odds
+
+    leaning_stop = Odds(
+        3000,
+        20,
+        1,
+        20.0,
+        70.0,
+        10.0,
+        30.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.4,
+        33.3,
+        22.0,
+        "Strongly toward the stop",
+        "stop",
+    )
+    monkeypatch.setattr(pipeline, "simulate", lambda *a, **k: leaning_stop)
+    user = await make_user(db)
+    await make_strategy(db, user, odds_filter=True)
+    await orb_day(db)
+    [sig] = await run_chain(db)
+    assert sig.status == "skipped" and sig.status_reason.startswith("Odds filter")
+    assert await db.scalar(select(func.count()).select_from(Trade)) == 0

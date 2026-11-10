@@ -2,7 +2,7 @@
 export const TEMPLATES = [
   { key: 'orb', name: 'Opening Range Breakout', idea: 'Trade the break of the first minutes’ high or low.', section: 'intraday', timeframe: '5m', phase: 2 },
   { key: 'vwap_cross', name: 'VWAP Cross', idea: 'Price crosses VWAP with strong volume.', section: 'intraday', timeframe: '5m', phase: 2 },
-  { key: 'supertrend', name: 'Supertrend', idea: 'Enter when the Supertrend line flips.', section: 'intraday', timeframe: '15m', phase: 2 },
+  { key: 'supertrend', name: 'Supertrend', idea: 'Enter when the Supertrend line flips.', section: 'intraday', timeframe: '5m', phase: 2 },
   { key: 'ema_cross', name: 'EMA Crossover', idea: 'Fast EMA crosses the slow EMA.', section: 'swing', timeframe: '1d', phase: 5 },
   { key: 'rsi_reversal', name: 'RSI Reversal', idea: 'Buy oversold, sell overbought.', section: 'swing', timeframe: '1d', phase: 5 },
   { key: 'breakout_volume', name: 'Volume Breakout', idea: 'New N-day high with high volume.', section: 'swing', timeframe: '1d', phase: 5 },

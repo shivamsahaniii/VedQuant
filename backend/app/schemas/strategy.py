@@ -92,6 +92,8 @@ class StrategyParams(BaseModel):
         default=Decimal("1"), gt=0, le=5, max_digits=4, decimal_places=2
     )
     builder: BuilderSpec | None = None  # own rules instead of a template
+    # Skip setups the odds agent says lean toward the stop (backtests: fewer, smaller losses).
+    odds_filter: bool = False
 
     @field_validator("symbols", mode="before")
     @classmethod
