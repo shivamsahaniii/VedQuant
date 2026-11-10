@@ -179,3 +179,66 @@ async def test_auth_events_recorded_without_password(client: AsyncClient, db: As
     events = (await db.scalars(select(EventLog).order_by(EventLog.id))).all()
     assert [e.message for e in events] == ["signup", "login failed"]
     assert all(PW not in str(e.payload) and "wrong-one" not in str(e.payload) for e in events)
+
+
+# ---------------------------------------------------------------- profile
+
+
+async def test_profile_name_and_phone(client: AsyncClient) -> None:
+    h = {"Authorization": f"Bearer {await signup(client)}"}
+    me = (await client.get("/auth/me", headers=h)).json()
+    assert me["full_name"] is None and me["phone"] is None
+    r = await client.patch(
+        "/auth/me", headers=h, json={"full_name": "  Shivam   Sahani ", "phone": "+91 98765-43210"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["full_name"] == "Shivam Sahani" and r.json()["phone"] == "+919876543210"
+    # Only what is sent changes; empty clears.
+    r = await client.patch("/auth/me", headers=h, json={"phone": ""})
+    assert r.json()["phone"] is None and r.json()["full_name"] == "Shivam Sahani"
+    assert (await client.patch("/auth/me", headers=h, json={"phone": "abc"})).status_code == 422
+    assert (await client.patch("/auth/me", json={"full_name": "x"})).status_code == 401
+
+
+async def test_email_change_needs_the_current_password(client: AsyncClient) -> None:
+    h = {"Authorization": f"Bearer {await signup(client)}"}
+    await signup(client, "taken@example.com")
+    new = {"email": "New@Example.com"}
+    assert (await client.patch("/auth/me", headers=h, json=new)).status_code == 403
+    bad = {**new, "current_password": "wrong-password-1"}
+    assert (await client.patch("/auth/me", headers=h, json=bad)).status_code == 403
+    taken = {"email": "taken@example.com", "current_password": PW}
+    assert (await client.patch("/auth/me", headers=h, json=taken)).status_code == 409
+    r = await client.patch("/auth/me", headers=h, json={**new, "current_password": PW})
+    assert r.status_code == 200 and r.json()["email"] == "new@example.com"
+    # Same session keeps working; login uses the new email.
+    assert (await client.get("/auth/me", headers=h)).json()["email"] == "new@example.com"
+    login = {"email": "new@example.com", "password": PW}
+    assert (await client.post("/auth/login", json=login)).status_code == 200
+    old = {"email": "user@example.com", "password": PW}
+    assert (await client.post("/auth/login", json=old)).status_code == 401
+
+
+async def test_change_password(client: AsyncClient) -> None:
+    h = {"Authorization": f"Bearer {await signup(client)}"}
+    new_pw = "another-strong-pw-2"
+    wrong = {"current_password": "wrong-password-1", "new_password": new_pw}
+    assert (await client.post("/auth/password", headers=h, json=wrong)).status_code == 403
+    short = {"current_password": PW, "new_password": "short"}
+    assert (await client.post("/auth/password", headers=h, json=short)).status_code == 422
+    same = {"current_password": PW, "new_password": PW}
+    assert (await client.post("/auth/password", headers=h, json=same)).status_code == 422
+    ok = {"current_password": PW, "new_password": new_pw}
+    assert (await client.post("/auth/password", headers=h, json=ok)).status_code == 204
+    creds = {"email": "user@example.com"}
+    assert (await client.post("/auth/login", json={**creds, "password": new_pw})).status_code == 200
+    assert (await client.post("/auth/login", json={**creds, "password": PW})).status_code == 401
+
+
+async def test_wrong_current_password_is_rate_limited(client: AsyncClient) -> None:
+    h = {"Authorization": f"Bearer {await signup(client)}"}
+    body = {"current_password": "wrong-password-1", "new_password": "another-strong-pw-2"}
+    codes = [
+        (await client.post("/auth/password", headers=h, json=body)).status_code for _ in range(6)
+    ]
+    assert codes[:5] == [403] * 5 and codes[5] == 429

@@ -19,6 +19,8 @@ class User(UUIDPk, CreatedAt, UpdatedAt, Base):
 
     email: Mapped[str] = mapped_column(String(320), unique=True)  # always stored lowercase
     password_hash: Mapped[str] = mapped_column(String(255))
+    full_name: Mapped[str | None] = mapped_column(String(80))
+    phone: Mapped[str | None] = mapped_column(String(20))
     role: Mapped[str] = mapped_column(String(16), default="user", server_default="user")
     is_active: Mapped[bool] = mapped_column(default=True, server_default=text("true"))
     # Each user starts in paper mode; live also needs the platform TRADING_MODE=live.

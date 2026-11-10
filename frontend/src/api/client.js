@@ -61,6 +61,8 @@ export const authApi = {
   signup: (email, password) => api.post('/auth/signup', { email, password }).then((r) => r.data),
   login: (email, password) => api.post('/auth/login', { email, password }).then((r) => r.data),
   me: () => api.get('/auth/me').then((r) => r.data),
+  updateProfile: (changes) => api.patch('/auth/me', changes).then((r) => r.data),
+  changePassword: (current, next) => api.post('/auth/password', { current_password: current, new_password: next }),
 }
 
 export const systemApi = {

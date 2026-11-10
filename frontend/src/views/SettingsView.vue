@@ -43,16 +43,7 @@
           </ol>
           <div class="card-body tight muted small">Live prices also need Dhan’s Data API plan to be active on your account.</div>
         </div>
-        <div class="card">
-          <div class="card-head"><h2>Account</h2></div>
-          <div class="card-body">
-            <dl class="kv" v-if="auth.user">
-              <dt>Email</dt><dd>{{ auth.user.email }}</dd>
-              <dt>Role</dt><dd class="cap">{{ auth.user.role }}</dd>
-              <dt>Trading mode</dt><dd class="cap">{{ auth.user.trading_mode }}</dd>
-            </dl>
-          </div>
-        </div>
+        <ProfilePanel />
         <div class="card">
           <div class="card-head"><h2>Security</h2></div>
           <ul class="list">
@@ -73,6 +64,7 @@ import { onMounted, ref } from 'vue'
 import AddBrokerDialog from '../components/AddBrokerDialog.vue'
 import AppIcon from '../components/AppIcon.vue'
 import BrokerCard from '../components/BrokerCard.vue'
+import ProfilePanel from '../components/ProfilePanel.vue'
 import ConnectionsPanel from '../components/ConnectionsPanel.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'

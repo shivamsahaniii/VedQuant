@@ -30,6 +30,7 @@
               <div class="menu-head">
                 <span class="avatar lg">{{ initial }}</span>
                 <div>
+                  <div v-if="auth.user?.full_name" class="menu-name">{{ auth.user.full_name }}</div>
                   <div class="menu-email">{{ auth.user?.email }}</div>
                   <div class="menu-role">{{ auth.user?.role }} · {{ auth.user?.trading_mode }} mode</div>
                 </div>
@@ -103,7 +104,7 @@ const tabs = computed(() => [
   { to: '/paper', label: 'Paper Trading', icon: 'paper' },
   { to: '/live', label: 'Live Trading', icon: 'live', tone: 'live', locked: !isLive.value },
 ])
-const initial = computed(() => (auth.user?.email?.[0] ?? '?').toUpperCase())
+const initial = computed(() => (auth.user?.full_name?.trim()?.[0] ?? auth.user?.email?.[0] ?? '?').toUpperCase())
 
 const now = ref(new Date())
 const market = computed(() => marketStatus(now.value))
@@ -172,6 +173,7 @@ function logout() {
 .mode.live { color: var(--live); }
 .menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 250px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px; }
 .menu-head { display: flex; align-items: center; gap: 10px; padding: 10px; }
+.menu-name { font-weight: 700; }
 .menu-email { font-weight: 600; font-size: 0.9rem; overflow-wrap: anywhere; }
 .menu-role { font-size: 0.78rem; color: var(--muted); text-transform: capitalize; }
 .menu-sep { height: 1px; background: var(--border); margin: 4px 0; }

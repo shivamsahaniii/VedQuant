@@ -101,6 +101,8 @@ onBeforeUnmount(() => market.disconnect())
 const marketState = computed(() => marketStatus())
 const mode = computed(() => auth.user?.trading_mode ?? 'paper')
 const firstName = computed(() => {
+  const full = auth.user?.full_name?.trim().split(/\s+/)[0]
+  if (full) return full
   const name = (auth.user?.email?.split('@')[0] ?? '').split(/[._-]/)[0]
   return name ? name[0].toUpperCase() + name.slice(1) : 'there'
 })
