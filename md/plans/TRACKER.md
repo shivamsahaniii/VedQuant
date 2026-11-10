@@ -1,6 +1,6 @@
 # VedQuant tracker
 
-**Updated:** 9 Nov 2026 (evening) · **Current goal:** paper trading on **real** NSE prices (virtual money, no broker orders) from the first trading day after setup.
+**Updated:** 10 Nov 2026 · **Current goal:** paper trading on **real** NSE prices (virtual money, no broker orders) from the first trading day after setup.
 
 Detailed steps live in the phase files; this page is the one-glance status.
 
@@ -40,7 +40,7 @@ Detailed steps live in the phase files; this page is the one-glance status.
 | 9 | Journal & dashboard | Live signals with reasons/odds/risk, positions, P&L, journal, per-strategy results, kill switch | 🟡 needs a full real session check |
 
 ### Screens
-Overview · **Markets** (Indices/Stocks/Crypto + charts) · Algo Trading · Intraday · Swing · Paper Trading · Live Trading (locked) · Settings (Connections, accounts, keys).
+Overview (real P&L / open positions) · **Markets** (Indices/Stocks/Crypto + charts) · Algo Trading · Intraday · Swing · Paper Trading · Live Trading (locked) · Settings (Connections, accounts, keys).
 Each section: add strategies, **Suggest only / Auto paper trade**, **Start / Pause**.
 
 ### Connections
@@ -82,7 +82,7 @@ Each section: add strategies, **Suggest only / Auto paper trade**, **Start / Pau
 | 4 | **Backtester** (same agents over months of real history, charges included) | Shows which strategies actually make money before any real money | Medium, most important |
 | 5 | **Telegram alerts** (signals, trades, errors, token expiry) | Know what happens without watching the screen | Small |
 | 6 | **One full week of unattended real-price paper trading** (step 3.14) | Gate before live trading | 5 market days |
-| 7 | **Easier daily login** for the data source (or a free broker: Angel One / Fyers adapter) | Daily token paste is friction | Medium |
+| 7 | **Easier daily login** for the data source (or a free broker: Angel One / Fyers adapter). Optional stop-gap: Yahoo connector for testing only (unofficial, delayed/not for product use) | Daily token paste is friction; no broker account yet | Medium |
 | 8 | **Per-user live feeds** (each user's own key → their own feed) | Today one live feed (first eligible user) | Medium |
 | 9 | 2FA + password re-entry for key changes | Security before real money | Small |
 | 10 | Answer the 3 open questions, then Phase 4 (small live) | Legal and technical gate | — |
@@ -103,6 +103,7 @@ Later: swing section with daily candles and trailing stops, no-code strategy bui
 3. May one user's broker data be shown to other users (exchange data licensing)?
 
 ## 7. Housekeeping
-- **Not under git yet**: nothing is versioned. Recommend `git init` + first commit.
+- Git: branch `main`, 2 commits as shivamsahaniii <shivamsahaniii17@gmail.com>. **No remote yet** (needs your GitHub repo URL before pushing).
+- Start locally: `docker compose up -d` (db, redis, api, feed, engine) + `cd frontend && npm run dev -- --host 127.0.0.1 --port 5173`; open http://local.vedquant.com.
 - `md/README.md` and `md/CLAUDE.md` are read-only; unlock with `chmod u+w md/README.md md/CLAUDE.md` to update docs (they still say "Vedquant").
 - Reference pack: `~/Downloads/skill-review/day-trader-skill` (MIT), read-only.
