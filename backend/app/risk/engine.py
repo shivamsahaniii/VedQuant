@@ -26,10 +26,14 @@ class RiskLimits:
     max_daily_loss: Decimal = Decimal("3000")
     max_trades_per_day: int = 5
     max_open_positions: int = 3
-    max_position_pct: Decimal = Decimal("50")  # of capital, by value
+    # of capital, by value. 33 % = the 3 allowed positions fit the capital together (no leverage).
+    max_position_pct: Decimal = Decimal("33")
     leverage: Decimal = Decimal("1")  # TODO(verify): broker intraday margin; 1 = no leverage
     max_qty: int = 10_000
     min_profit_multiple: Decimal = Decimal("2")  # target profit >= this x round-trip charges
+    # A trade cut by the cash left to under this share of its normal size is not worth taking
+    # (e.g. 1 share when the position-size rule allows 40).
+    min_size_fraction: Decimal = Decimal("0.25")
     product: Product = "intraday"
 
 
@@ -132,6 +136,14 @@ def check_entry(
             "size",
             f"Capital too small: the {by} limit allows 0 shares "
             f"(risk {plan.risk_per_share} a share)",
+        )
+    # The size this trade would have with free cash; leftover cash must not shrink it to crumbs.
+    planned = min(v for k, v in limits.items() if k != "cash")
+    if by == "cash" and planned > 0 and Decimal(qty) < lim.min_size_fraction * planned:
+        return Blocked(
+            "size",
+            f"Too small to be worth it: the cash left allows {qty} of the planned {planned} "
+            f"shares (under {lim.min_size_fraction * 100:.0f} %)",
         )
     max_loss = plan.risk_per_share * qty
     # Daily loss: today's loss + what is still at risk + this trade's max loss must fit the limit.

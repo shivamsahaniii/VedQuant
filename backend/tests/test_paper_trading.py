@@ -111,11 +111,11 @@ async def test_auto_strategy_takes_a_paper_trade(db: AsyncSession):
     assert sig.status == "taken", sig.status_reason
     assert sig.plan["stop"] == "819.75" and sig.plan["stop_rule"] == "or_mid"
     assert sig.plan["target"] == "831.30"
-    assert sig.risk["qty"] == 60 and sig.risk["sized_by"] == "position size"
+    assert sig.risk["qty"] == 40 and sig.risk["sized_by"] == "position size"
     assert sig.odds["available"] is False  # no past sessions yet: said, not guessed
 
     trade = await db.scalar(select(Trade).where(Trade.user_id == user.id))
-    assert trade.status == "open" and trade.qty == 60 and trade.strategy_id == strat.id
+    assert trade.status == "open" and trade.qty == 40 and trade.strategy_id == strat.id
     assert trade.entry_price == D("824.05")  # 823.60 + 0.05 % slippage, rounded up to the tick
     roles = set((await db.scalars(select(Order.role).where(Order.trade_id == trade.id))).all())
     assert roles == {"entry", "stop", "target"}

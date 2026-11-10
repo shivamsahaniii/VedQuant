@@ -133,14 +133,14 @@ NOW = at(10, 6)
 def test_sizing_takes_the_smallest_limit():
     qty, by, limits = size(PLAN, LIM, D("100000"))
     assert limits["risk per trade"] == 454  # 1 % of 1,00,000 = 1,000 / 2.20
-    assert limits["position size"] == 42  # 50 % of capital / 1,167.40
-    assert (qty, by) == (42, "position size")
+    assert limits["position size"] == 28  # 33 % of capital / 1,167.40
+    assert (qty, by) == (28, "position size")
 
 
 def test_approved_trade():
     a = check_entry(PLAN, "SBIN", LIM, ACCT, NOW)
-    assert a.ok and a.qty == 42
-    assert a.max_loss == D("92.40") and a.target_profit == D("184.80")
+    assert a.ok and a.qty == 28
+    assert a.max_loss == D("61.60") and a.target_profit == D("123.20")
     assert a.charges.total > 0 and a.target_profit >= 2 * a.charges.total
 
 
@@ -174,3 +174,13 @@ def test_exits_are_never_blocked_by_limits():
     assert check_exit(42, 42).ok
     assert not check_exit(0, 1).ok
     assert not check_exit(10, 11).ok
+
+
+def test_leftover_cash_does_not_make_crumb_trades():
+    # Two positions already use the cash: the normal size is 28, the cash left buys 3.
+    low_cash = replace(ACCT, cash=D("4000"), open_positions=2)
+    b = check_entry(PLAN, "SBIN", LIM, low_cash, NOW)
+    assert not b.ok and b.check == "size" and "Too small to be worth it" in b.reason
+    # Enough cash for a third of the normal size or more: taken, sized by the cash.
+    ok = check_entry(PLAN, "SBIN", LIM, replace(ACCT, cash=D("12000"), open_positions=2), NOW)
+    assert ok.ok and ok.qty == 10 and ok.sized_by == "cash"

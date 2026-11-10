@@ -1,6 +1,6 @@
 # VedQuant tracker
 
-**Updated:** 10 Nov 2026 · **Current goal:** paper trading on **real** NSE prices (virtual money, no broker orders) from the first trading day after setup.
+**Updated:** 10 Nov 2026 (afternoon) · **Current goal:** paper trading on **real** NSE prices (virtual money, no broker orders) from the first trading day after setup.
 
 Detailed steps live in the phase files; this page is the one-glance status.
 
@@ -13,14 +13,14 @@ Detailed steps live in the phase files; this page is the one-glance status.
 | Phase 1: Foundation | ✅ 19/19 | Sign-up/login, encrypted per-user broker keys (last 4 shown), Dhan adapter, live prices, candles, user isolation, no secrets in logs |
 | Paper trading engine (agent team) | 🟡 22/32 | All 9 agents built and running; waiting on the first real-market session |
 | Connections & Markets | 🟡 | Provider catalog, per-market data source, chart provider, Indices/Stocks/Crypto lists, candlestick charts |
-| Real-price paper trading | 🟡 built, not yet run on a real key | Dhan live feed + history + indices + privacy + holidays; needs your key to verify |
+| Real-price paper trading | 🟢 Dhan connected, Data plan active (to 9 Dec), 60 days of real 5m history loaded | Live ticks start on the first trading day (11 Nov); full replay of 9 Nov through all agents passed |
 | Phase 2: Strategies & backtesting | 🟡 4/13 | Rules done; **no backtester yet** |
 | Phase 3: Scanner, risk, paper | 🟡 3/16 (+5 partly) | Scanner loop, paper order manager, dashboard done |
 | Phase 4: Small live | ⬜ 0/10 | Blocked by 3 open questions (section 6) |
 | Phase 5: Expansion | ⬜ 0/13 | Swing, no-code builder, reports, PWA |
 | Phase 6: Options & crypto | ⬜ 0/13 | Crypto list exists; no exchange adapter |
 
-**System:** 5 services running (db, redis, api, feed, engine) · 339 tests passing · lint clean · 5 database migrations · ~8,100 lines backend, ~3,900 lines frontend · URL `http://local.vedquant.com`.
+**System:** 5 services running (db, redis, api, feed, engine) · 363 tests passing · lint clean · 5 database migrations · ~8,100 lines backend, ~3,900 lines frontend · URL `http://local.vedquant.com`.
 
 ---
 
@@ -41,7 +41,7 @@ Detailed steps live in the phase files; this page is the one-glance status.
 
 ### Screens
 Overview (real P&L / open positions) · **Markets** (Indices/Stocks/Crypto + charts) · Algo Trading · Intraday · Swing · Paper Trading · Live Trading (locked) · Settings (Connections, accounts, keys).
-Each section: add strategies, **Suggest only / Auto paper trade**, **Start / Pause**.
+Each section: add strategies (templates or **Build from scratch**: own rules from dropdowns), **Suggest only / Auto paper trade**, **Start / Pause**.
 
 ### Connections
 | Ready | Coming soon (users can request) |
@@ -82,7 +82,7 @@ Each section: add strategies, **Suggest only / Auto paper trade**, **Start / Pau
 | 4 | **Backtester** (same agents over months of real history, charges included) | Shows which strategies actually make money before any real money | Medium, most important |
 | 5 | **Telegram alerts** (signals, trades, errors, token expiry) | Know what happens without watching the screen | Small |
 | 6 | **One full week of unattended real-price paper trading** (step 3.14) | Gate before live trading | 5 market days |
-| 7 | **Easier daily login** for the data source (or a free broker: Angel One / Fyers adapter). Optional stop-gap: Yahoo connector for testing only (unofficial, delayed/not for product use) | Daily token paste is friction; no broker account yet | Medium |
+| 7 | ✅ **Login with Dhan** (API key + secret, one click a day; step 1 verified with Dhan, full login to try) · **Easier daily login** for the data source (or a free broker: Angel One / Fyers adapter). Optional stop-gap: Yahoo connector for testing only (unofficial, delayed/not for product use) | Daily token paste is friction; no broker account yet | Medium |
 | 8 | **Per-user live feeds** (each user's own key → their own feed) | Today one live feed (first eligible user) | Medium |
 | 9 | 2FA + password re-entry for key changes | Security before real money | Small |
 | 10 | Answer the 3 open questions, then Phase 4 (small live) | Legal and technical gate | — |
@@ -90,6 +90,12 @@ Each section: add strategies, **Suggest only / Auto paper trade**, **Start / Pau
 Later: swing section with daily candles and trailing stops, no-code strategy builder, reports, PWA, options, crypto (24×7 rules), news agent.
 
 ---
+
+## 4b. Findings from the 9 Nov real-data replay
+- Fixed: leftover cash made 1-share trades; position cap is now 33 % so 3 positions fit the capital.
+- 4 of 5 trades were taken although the odds agent said "toward the stop"; all lost (net -1,154 for the day). Decide: use the odds as a gate? Measure with the backtester first.
+- Dhan stock 5m history ends at 15:10 (indices 15:25); harmless (square-off 15:15).
+- Special sessions (e.g. Sunday 8 Nov 14:20-15:10) are not traded: calendar is weekdays minus holidays.
 
 ## 5. Things to verify (`TODO(verify)` in code, 13 places)
 - Dhan: history timestamp format/zone, index history (`INDEX`), live packet layout and tick time, several packets per message.
