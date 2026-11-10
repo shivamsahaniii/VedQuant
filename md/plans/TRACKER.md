@@ -1,6 +1,6 @@
 # VedQuant tracker
 
-**Updated:** 10 Nov 2026 (afternoon) · **Current goal:** paper trading on **real** NSE prices (virtual money, no broker orders) from the first trading day after setup.
+**Updated:** 10 Nov 2026 (night) · **Current goal:** paper trading on **real** NSE prices (virtual money, no broker orders) from the first trading day after setup.
 
 Detailed steps live in the phase files; this page is the one-glance status.
 
@@ -20,7 +20,7 @@ Detailed steps live in the phase files; this page is the one-glance status.
 | Phase 5: Expansion | ⬜ 0/13 | Swing, no-code builder, reports, PWA |
 | Phase 6: Options & crypto | ⬜ 0/13 | Crypto list exists; no exchange adapter |
 
-**System:** 5 services running (db, redis, api, feed, engine) · 363 tests passing · lint clean · 5 database migrations · ~8,100 lines backend, ~3,900 lines frontend · URL `http://local.vedquant.com`.
+**System:** 6 services running (db, redis, api, feed, engine, web) · 368 tests passing · lint clean · 5 database migrations · ~8,100 lines backend, ~3,900 lines frontend · URL `http://local.vedquant.com`.
 
 ---
 
@@ -81,6 +81,7 @@ Each section: add strategies (templates or **Build from scratch**: own rules fro
 | A2 | Limits page per section (capital, daily loss, trades/day, position %) + saved kill switch + daily halt | Small |
 | A3 | Telegram alerts (signals, trades, errors, token expiry) + Dhan token auto-renew | Small |
 | A4 | Backtest in the UI (Run backtest button, report page) | Small-medium |
+| A7 | Change-password screen, accounts for invited people (sign-ups are closed), read-only viewer login | Small |
 | A5 | UI leftovers: NIFTY card last close, remove 2 simulated signals, special sessions (Muhurat) | Small |
 | A6 | One week of unattended paper trading (gate before live) | 5 market days |
 
@@ -91,7 +92,14 @@ Each section: add strategies (templates or **Build from scratch**: own rules fro
 | B2 | Longer history (6+ months) for backtests; walk-forward check so results are not over-fitted |
 | B3 | Promote only strategies that are profitable in backtest AND in 10+ paper days |
 
-### Stage C: deployment (any weekend)
+### Hosting today (laptop, free)
+- Built site + API in the `web` container (127.0.0.1:8080), public through Tailscale Funnel:
+  https://vedquant.oarfish-alnitak.ts.net (on the laptop itself use http://local.vedquant.com or the same address with :8443).
+- Sign-ups closed (`signups_open=false`). Set an account's password/email:
+  `docker compose exec api python -m app.cli set-password <email> [--email <new>]`.
+- Laptop must be on and awake 09:00-15:35 IST. Guide: deploy/share.md.
+
+### Stage C: deployment to a server (later)
 | # | Task |
 |---|---|
 | C1 | Server: AWS Lightsail Mumbai + static IP + domain (user) |
