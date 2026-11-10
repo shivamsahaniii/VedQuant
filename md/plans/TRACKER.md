@@ -72,24 +72,52 @@ Each section: add strategies (templates or **Build from scratch**: own rules fro
 
 ---
 
-## 4. What we build next (in order)
+## 4. What is pending (ultimate product)
 
-| # | Task | Why | Size |
-| --- | --- | --- | --- |
-| 1 | **Verify Dhan with your key** (history timestamps, index history, live packets) | 6 `TODO(verify)` items in `dhan.py` | Evening before session |
-| 2 | **First real session, watched together** (09:15–15:30) | Proves the whole chain on real prices (closes A.9) | 1 market day |
-| 3 | **Section settings & limits page** + saved kill switch + daily halt | Each user sets capital, daily loss, trades/day (now defaults ₹1,00,000 / ₹3,000 / 5) | Small |
-| 4 | **Backtester** (same agents over months of real history, charges included) | Shows which strategies actually make money before any real money | Medium, most important |
-| 5 | **Telegram alerts** (signals, trades, errors, token expiry) | Know what happens without watching the screen | Small |
-| 6 | **One full week of unattended real-price paper trading** (step 3.14) | Gate before live trading | 5 market days |
-| 7 | ✅ **Login with Dhan** (API key + secret, one click a day; step 1 verified with Dhan, full login to try) · **Easier daily login** for the data source (or a free broker: Angel One / Fyers adapter). Optional stop-gap: Yahoo connector for testing only (unofficial, delayed/not for product use) | Daily token paste is friction; no broker account yet | Medium |
-| 8 | **Per-user live feeds** (each user's own key → their own feed) | Today one live feed (first eligible user) | Medium |
-| 9 | 2FA + password re-entry for key changes | Security before real money | Small |
-| 10 | Answer the 3 open questions, then Phase 4 (small live) | Legal and technical gate | — |
+### Stage A: real-price paper trading, proven (now -> ~1 week)
+| # | Task | Size |
+|---|---|---|
+| A1 | First live session 11 Nov: verify Dhan live packets, tick time, index feed (`TODO(verify)`) | 1 day |
+| A2 | Limits page per section (capital, daily loss, trades/day, position %) + saved kill switch + daily halt | Small |
+| A3 | Telegram alerts (signals, trades, errors, token expiry) + Dhan token auto-renew | Small |
+| A4 | Backtest in the UI (Run backtest button, report page) | Small-medium |
+| A5 | UI leftovers: NIFTY card last close, remove 2 simulated signals, special sessions (Muhurat) | Small |
+| A6 | One week of unattended paper trading (gate before live) | 5 market days |
 
-Later: swing section with daily candles and trailing stops, no-code strategy builder, reports, PWA, options, crypto (24×7 rules), news agent.
+### Stage B: a strategy that makes money (1-3 weeks, ongoing)
+| # | Task |
+|---|---|
+| B1 | Improve strategies with the backtester: target R, trend-day filter, fewer trades (charges), per-stock selection |
+| B2 | Longer history (6+ months) for backtests; walk-forward check so results are not over-fitted |
+| B3 | Promote only strategies that are profitable in backtest AND in 10+ paper days |
 
----
+### Stage C: deployment (any weekend)
+| # | Task |
+|---|---|
+| C1 | Server: AWS Lightsail Mumbai + static IP + domain (user) |
+| C2 | Production setup: Caddy HTTPS, built frontend, prod compose, daily DB backups, server-only secrets, signups closed (me) |
+| C3 | Dhan Redirect URL -> https://<domain>/dhan/callback; re-enter keys on the server |
+
+### Stage D: real money, small (Phase 4)
+| # | Task |
+|---|---|
+| D1 | Live order manager for Dhan: limit orders with price protection (no API market orders), 10 orders/s, fill tracking, OCO stop/target, square-off |
+| D2 | Static IP registered on Dhan (from C1) |
+| D3 | 2FA + password re-entry for key changes |
+| D4 | Reconciliation: broker positions vs ours, alert + halt on mismatch |
+| D5 | Answers: SEBI (algo for others), static IP for many users, data sharing |
+| D6 | Unlock live: Rs 500-1,000, 2 weeks tiny size |
+
+### Stage E: multi-client product
+| # | Task |
+|---|---|
+| E1 | Per-user live data feeds (each client's own key) |
+| E2 | Invite / onboarding, plans and billing, admin panel |
+| E3 | Data export and delete (DPDP Act), privacy policy, terms, risk disclosures |
+| E4 | Monitoring, uptime alerts, log retention, encryption-key backup |
+
+### Stage F: expansion (Phase 5-6)
+Swing trading (daily candles, trailing stop) · reports (monthly P&L, tax) · PWA phone app · more brokers (Angel One, Fyers, Zerodha, Upstox) · F&O options · crypto (24x7 rules) · news agent · 15m/1h live timeframes.
 
 ## 4b. Findings from the 9 Nov real-data replay
 - Fixed: leftover cash made 1-share trades; position cap is now 33 % so 3 positions fit the capital.
