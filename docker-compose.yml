@@ -76,6 +76,19 @@ services:
       redis:
         condition: service_healthy
 
+  # Built site + API on one local port, for other devices through Tailscale (see deploy/share.md).
+  # Rebuild the site after frontend changes: (cd frontend && npm run build)
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv:ro
+    depends_on:
+      - api
+
 volumes:
   db_data:
   redis_data:
