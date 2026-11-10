@@ -197,7 +197,7 @@ async def test_tested_dhan_becomes_the_data_source_automatically(client, db, mon
     h, uid = await signup(client)
     assert (await prefs_of(client, h))["stocks"] == "paper"
     acct, r = await _dhan_tested(client, db, monkeypatch, h, uid)
-    assert "Real prices for indices and stocks" in r["message"]
+    assert "Indices and stocks data now use this account" in r["message"]
     src = await prefs_of(client, h)
     assert src["indices"] == "dhan" and src["stocks"] == "dhan" and src["crypto"] is None
 
@@ -210,7 +210,7 @@ async def test_tested_dhan_becomes_the_data_source_automatically(client, db, mon
 async def test_failed_test_keeps_simulated_prices(client, db, monkeypatch):
     h, uid = await signup(client)
     _, r = await _dhan_tested(client, db, monkeypatch, h, uid, ok=False)
-    assert "Real prices" not in r["message"]
+    assert "now use this account" not in r["message"]
     assert (await prefs_of(client, h))["stocks"] == "paper"
 
 

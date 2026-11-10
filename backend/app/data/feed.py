@@ -175,6 +175,7 @@ async def backfill(
     """Load real 5m history (60 days) and today's 1m candles for every symbol."""
     from datetime import timedelta
 
+    from app.brokers.base import DataPlanRequired
     from app.data.candles import Bar
 
     total = 0
@@ -186,6 +187,8 @@ async def backfill(
                 continue
             try:
                 df = await adapter.historical(exchange, symbol, tf, start, now)
+            except DataPlanRequired:
+                raise  # every symbol would fail the same way: tell the user once, clearly
             except Exception as exc:  # noqa: BLE001 - one symbol failing must not stop the rest
                 log.warning("history failed", symbol=symbol, timeframe=tf, error=str(exc)[:200])
                 continue
@@ -215,7 +218,7 @@ async def run() -> None:  # pragma: no cover - long-running process, exercised m
     import redis.asyncio as aioredis
     from sqlalchemy import delete
 
-    from app.brokers.base import BrokerAuthError
+    from app.brokers.base import BrokerAuthError, DataPlanRequired
     from app.brokers.paper import PaperBroker
     from app.brokers.registry import create_adapter
     from app.brokers.service import load_credentials
@@ -352,6 +355,18 @@ async def run() -> None:  # pragma: no cover - long-running process, exercised m
                     await processor.handle(tick)
                     if not in_feed_window(datetime.now(UTC), calendar):
                         break
+            except DataPlanRequired:
+                await set_status(
+                    FeedStatus(
+                        src.connector,
+                        "error",
+                        f"Your {name} key works, but the account has no Data API plan, so {name} "
+                        "sends no prices. Activate the Data API plan on web.dhan.co (DhanHQ APIs); "
+                        "real prices start here within 5 minutes. No prices, no trades until then.",
+                        owner,
+                    )
+                )
+                await asyncio.sleep(300)
             except BrokerAuthError as exc:
                 async with sessionmaker() as db:
                     acc = await db.get(BrokerAccount, src.account_id)

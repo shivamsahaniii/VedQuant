@@ -335,3 +335,26 @@ async def test_holidays_come_from_the_platform_setting(db: AsyncSession):
     cal = await load_calendar(db)
     assert not cal.is_trading_day(date(2026, 11, 10)) and cal.is_trading_day(date(2026, 11, 11))
     assert not in_feed_window(at(10, 0), cal)
+
+
+async def test_backfill_stops_at_once_without_a_data_plan(db: AsyncSession):
+    import contextlib
+
+    from app.brokers.base import DataPlanRequired
+    from app.data.feed import backfill
+
+    class NoPlan:
+        calls = 0
+
+        async def historical(self, *a):
+            self.calls += 1
+            raise DataPlanRequired("Dhan DH-902: This API requires a Data APIs Plan")
+
+    @contextlib.asynccontextmanager
+    async def sessionmaker():
+        yield db
+
+    adapter = NoPlan()
+    with pytest.raises(DataPlanRequired):
+        await backfill(adapter, sessionmaker, [("NSE", "SBIN"), ("NSE", "TCS")], at(10, 2), None)
+    assert adapter.calls == 1  # not once per symbol and timeframe

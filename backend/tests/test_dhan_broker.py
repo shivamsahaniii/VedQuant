@@ -408,3 +408,37 @@ def test_dhan_in_registry_with_form_fields() -> None:
         token_field = dhan["credential_fields"][purpose][1]
         assert token_field["secret"] is True and token_field["help"]
     assert isinstance(registry.create_adapter("dhan", CREDS), DhanBroker)
+
+
+PLAN_ERR = {
+    "errorType": "Invalid_Authentication",
+    "errorCode": "DH-902",
+    "errorMessage": "This API requires a Data APIs Plan. Current plan: Free Plan",
+}
+
+
+async def test_missing_data_plan_is_its_own_error_not_an_expired_token() -> None:
+    from app.brokers.base import DataPlanRequired
+
+    broker, _ = make({("POST", "/v2/charts/intraday"): (401, PLAN_ERR)})
+    with pytest.raises(DataPlanRequired, match="Data APIs Plan"):
+        await broker._request("POST", "/charts/intraday", "data", json_body={})
+    other = {**PLAN_ERR, "errorMessage": "User has no access to this API"}
+    broker, _ = make({("POST", "/v2/charts/intraday"): (401, other)})
+    with pytest.raises(BrokerAuthError) as exc:
+        await broker._request("POST", "/charts/intraday", "data", json_body={})
+    assert not isinstance(exc.value, DataPlanRequired)
+
+
+async def test_trading_key_without_data_plan_passes_with_a_note() -> None:
+    trading_only = BrokerCredentials(trading=dict(CREDS.trading))
+    broker, _ = make(
+        {
+            ("GET", "/v2/profile"): (200, {**PROFILE, "dataPlan": "Deactive"}),
+            ("GET", "/v2/fundlimit"): (200, FUNDS),
+        },
+        trading_only,
+    )
+    report = await broker.test_connection()
+    assert report.ok and report.purpose_ok == {"trading": True}
+    assert "Data API plan is not active" in report.message

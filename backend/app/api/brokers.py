@@ -192,7 +192,7 @@ async def test_account(
     await db.refresh(acct)
     message = acct.last_error or report.message
     if switched:
-        message += f" Real prices for {' and '.join(switched)} now come from this account."
+        message += f" {' and '.join(switched).capitalize()} data now use this account."
     return ConnectionTestOut(
         ok=report.ok,
         message=message,

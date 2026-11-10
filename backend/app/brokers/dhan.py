@@ -35,6 +35,7 @@ from app.brokers.base import (
     BrokerError,
     Capability,
     ConnectionReport,
+    DataPlanRequired,
     FieldSpec,
     Funds,
     Instrument,
@@ -216,6 +217,8 @@ class DhanBroker(BrokerAdapter):
         code = str(body.get("errorCode", "")) if isinstance(body, dict) else ""
         msg = str(body.get("errorMessage", "")) if isinstance(body, dict) else ""
         text = f"Dhan {code or resp.status_code} on {path}: {msg or resp.reason_phrase}"
+        if code == "DH-902" and "plan" in msg.lower():
+            raise DataPlanRequired(text)  # valid token, no Data APIs subscription
         if code in ("DH-901", "DH-902") or resp.status_code == 401:
             raise BrokerAuthError(text)
         if code == "DH-904" or resp.status_code == 429:
@@ -228,6 +231,7 @@ class DhanBroker(BrokerAdapter):
         """Checks each purpose that has credentials: profile (token valid), funds (trading)."""
         purpose_ok: dict[str, bool] = {}
         notes: list[str] = []
+        info: list[str] = []  # not failures, but worth telling the user
         funds: Funds | None = None
         expires: datetime | None = None
 
@@ -243,6 +247,14 @@ class DhanBroker(BrokerAdapter):
                     notes.append("data: Data API plan is not active on this Dhan account")
                 if purpose == "trading":
                     funds = await self.funds()
+                    if (
+                        not self.credentials.for_purpose("data")
+                        and profile.get("dataPlan") != "Active"
+                    ):
+                        info.append(
+                            "Data API plan is not active, so prices stay simulated until you "
+                            "activate it on web.dhan.co"
+                        )
                 purpose_ok[purpose] = ok
             except BrokerError as exc:
                 purpose_ok[purpose] = False
@@ -252,6 +264,8 @@ class DhanBroker(BrokerAdapter):
             return ConnectionReport(ok=False, message="No Dhan credentials added yet")
         ok = all(purpose_ok.values())
         message = "Connected to Dhan" if ok else "; ".join(notes)
+        if ok and info:
+            message += ". " + "; ".join(info) + "."
         return ConnectionReport(
             ok=ok, message=message, purpose_ok=purpose_ok, funds=funds, token_expires_at=expires
         )

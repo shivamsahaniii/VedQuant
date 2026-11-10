@@ -46,6 +46,10 @@ class BrokerAuthError(BrokerError):
     """Credentials missing, wrong or expired."""
 
 
+class DataPlanRequired(BrokerError):
+    """The key is valid, but the account has no paid market-data plan (e.g. Dhan Data APIs)."""
+
+
 class BrokerNotSupported(BrokerError):
     """This adapter does not support the requested capability (yet)."""
 
