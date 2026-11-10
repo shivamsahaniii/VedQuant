@@ -85,9 +85,12 @@ class MarketContext:
         return d
 
 
-def session_phase(now: datetime) -> str:
+def session_phase(now: datetime, calendar: Any = None) -> str:
+    """`calendar` (app.engine.nse.TradingCalendar) adds exchange holidays to weekends."""
     t = now.astimezone(IST).time()
     if now.astimezone(IST).weekday() >= 5:
+        return "closed"
+    if calendar is not None and not calendar.is_trading_day(now.astimezone(IST).date()):
         return "closed"
     if t < time(9, 15):
         return "pre-open"
@@ -125,12 +128,13 @@ def compute_context(
     stocks: dict[str, tuple[float, float]],
     now: datetime,
     timeframe: str = "5m",
+    calendar: Any = None,
 ) -> MarketContext:
     """`index`: NIFTY candles sorted by ts (UTC) with open/high/low/close/volume (floats)."""
     df = index.reset_index(drop=True)
     bars = len(df)
     breadth = breadth_of(stocks)
-    phase = session_phase(now)
+    phase = session_phase(now, calendar)
     reasons: list[str] = []
 
     if bars == 0:

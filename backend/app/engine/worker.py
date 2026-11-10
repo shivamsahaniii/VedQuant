@@ -93,7 +93,7 @@ def stocks_from_quotes(raw: dict[str, str]) -> dict[str, tuple[float, float]]:
 async def refresh_context(session: AsyncSession, redis: Any, now: datetime) -> MarketContext:
     df, tf = await load_index_candles(session, now)
     stocks = stocks_from_quotes(await redis.hgetall(QUOTES_KEY))
-    ctx = compute_context(df, stocks, now, tf)
+    ctx = compute_context(df, stocks, now, tf, await load_calendar(session))
     payload = json.dumps(ctx.as_dict())
     await redis.set(CONTEXT_KEY, payload)
     await redis.publish(CONTEXT_CHANNEL, payload)

@@ -30,7 +30,7 @@
               <dt>Max daily loss</dt><dd>{{ formatINR(3000) }}</dd>
               <dt>Max open positions</dt><dd>3</dd>
               <dt>Max trades / day</dt><dd>5</dd>
-              <dt>Max position size</dt><dd>50% of capital</dd>
+              <dt>Max position size</dt><dd>33% of capital (3 positions fit)</dd>
               <dt>Stop loss</dt><dd>Required on every trade</dd>
               <dt>Charges</dt><dd>Target must pay them 2× over</dd>
             </dl>

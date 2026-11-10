@@ -26,7 +26,7 @@
             <div class="p-title">{{ p === 'trading' ? 'Trading keys' : 'Data keys' }}</div>
             <div class="p-sub">{{ p === 'trading' ? 'Place orders (Phase 4)' : 'Live prices & history' }}</div>
           </div>
-          <span class="tag" :class="account.credentials[p].complete ? 'good' : ''">{{ account.credentials[p].complete ? 'Added' : 'Not added' }}</span>
+          <span class="tag" :class="account.credentials[p].complete || usesTradingKeys(p) ? 'good' : ''">{{ account.credentials[p].complete ? 'Added' : usesTradingKeys(p) ? 'Uses trading keys' : 'Not added' }}</span>
         </div>
         <dl class="p-fields">
           <template v-for="f in account.credentials[p].fields" :key="f.name">
@@ -117,6 +117,8 @@ async function dhanLogin() {
     busy.value = false
   }
 }
+// Data calls fall back to the trading token when no separate data key is saved.
+const usesTradingKeys = (p) => p === 'data' && !props.account.credentials.data.complete && props.account.credentials.trading.complete
 const anySaved = (p) => props.account.credentials[p].fields.some((f) => f.saved)
 
 function showResult(r) {

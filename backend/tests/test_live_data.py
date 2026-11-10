@@ -3,7 +3,7 @@
 import json
 import struct
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal as D
 from zoneinfo import ZoneInfo
 
@@ -392,3 +392,43 @@ async def test_holidays_endpoint(db: AsyncSession):
             assert (await c.get("/market/holidays")).status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+async def test_closed_market_shows_the_last_real_close(client, db):
+    from decimal import Decimal as D
+
+    from app.models import Candle
+
+    c, redis = client
+    r = await c.post("/auth/signup", json={"email": "a@example.com", "password": PW})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    uid = (await c.get("/auth/me", headers=h)).json()["id"]
+    db.add(BrokerAccount(user_id=uuid.UUID(uid), broker="dhan", label="Main", status="connected"))
+    await db.commit()
+    await c.put("/connectors/preferences", headers=h, json={"data_sources": {"stocks": "dhan"}})
+    await redis.set(FEED_KEY, FeedStatus("dhan", "closed", "Market closed", uid).as_json())
+    for ts, close in (
+        (at(15, 10) - timedelta(days=1), "1000"),
+        (at(15, 5), "990"),
+        (at(15, 10), "1010"),
+    ):
+        db.add(
+            Candle(
+                exchange="NSE",
+                symbol="SBIN",
+                timeframe="5m",
+                ts=ts,
+                open=D(close),
+                high=D(close),
+                low=D(close),
+                close=D(close),
+                volume=1,
+            )
+        )
+    await db.flush()
+    by = {i["symbol"]: i for i in (await c.get("/markets/watchlist", headers=h)).json()["items"]}
+    q = by["SBIN"]["quote"]
+    assert q["ltp"] == "1010.0000" and q["last_close"] is True
+    assert q["change"] == "10.00" and q["change_pct"] == "1.00"  # vs the previous day's close
+    assert by["SBIN"]["data"]["label"] == "Dhan · last price"
+    assert by["TCS"]["quote"] is None  # no candles: nothing invented

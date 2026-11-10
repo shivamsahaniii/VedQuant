@@ -151,3 +151,12 @@ def test_detects_simulated_trend_days(regime: str, expected: str) -> None:
 def test_sideways_days_rarely_called_trends() -> None:
     trends = [simulated_context(seed, "sideways") for seed in range(10)]
     assert trends.count("sideways") >= 5, trends
+
+
+def test_holiday_is_a_closed_session():
+    from app.engine.context import session_phase
+    from app.engine.nse import TradingCalendar
+
+    noon = datetime(2026, 11, 10, 6, 30, tzinfo=UTC)  # Tue 12:00 IST
+    assert session_phase(noon) == "mid-day"
+    assert session_phase(noon, TradingCalendar(["2026-11-10"])) == "closed"

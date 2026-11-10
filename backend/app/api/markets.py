@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field, field_validator
@@ -27,7 +30,9 @@ from app.markets.catalog import (
     tv_symbol,
     valid_symbol,
 )
-from app.models import User, WatchItem
+from app.models import Candle, User, WatchItem
+
+IST = ZoneInfo("Asia/Kolkata")
 
 router = APIRouter(prefix="/markets", tags=["markets"])
 SEEDED_KEY = "watchlist_seeded"
@@ -112,6 +117,43 @@ def _data_status(
     }
 
 
+async def _last_close(db: Any, exchange: str, symbol: str) -> dict[str, Any] | None:
+    """Last real 5m close, and its change vs the previous trading day's close."""
+    last = await db.scalar(
+        select(Candle)
+        .where(Candle.exchange == exchange, Candle.symbol == symbol, Candle.timeframe == "5m")
+        .order_by(Candle.ts.desc())
+        .limit(1)
+    )
+    if last is None:
+        return None
+    day = last.ts.astimezone(IST).date()
+    day_start = datetime(day.year, day.month, day.day, tzinfo=IST)
+    prev = await db.scalar(
+        select(Candle.close)
+        .where(
+            Candle.exchange == exchange,
+            Candle.symbol == symbol,
+            Candle.timeframe == "5m",
+            Candle.ts < day_start,
+        )
+        .order_by(Candle.ts.desc())
+        .limit(1)
+    )
+    change = last.close - prev if prev else Decimal(0)
+    pct = (change / prev * 100) if prev else Decimal(0)
+    return {
+        "exchange": exchange,
+        "symbol": symbol,
+        "ltp": str(last.close),
+        "change": str(change.quantize(Decimal("0.01"))),
+        "change_pct": str(pct.quantize(Decimal("0.01"))),
+        "prev_close": str(prev) if prev else None,
+        "last_close": True,
+        "as_of": (last.ts + timedelta(minutes=5)).isoformat(),
+    }
+
+
 @router.get("/catalog")
 async def market_catalog(
     user: CurrentUser, db: DbSession, asset: AssetClass | None = None
@@ -153,6 +195,8 @@ async def watchlist(user: CurrentUser, db: DbSession) -> dict[str, Any]:
             feed is not None and feed.is_real and feed.source == source
         )
         q = json.loads(raw) if (raw and matches) else None
+        if q is None and matches and feed is not None and feed.is_real and feed.state != "live":
+            q = await _last_close(db, w.exchange, w.symbol)  # market closed: last real close
         out.append(
             {
                 "id": str(w.id),
